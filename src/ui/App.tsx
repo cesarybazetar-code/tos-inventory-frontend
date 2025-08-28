@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react'
+import InvoiceOCR from "./InvoiceOCR";
 
 const API_DEFAULT = (import.meta as any).env?.VITE_API_BASE_URL || localStorage.getItem('VITE_API_BASE_URL') || '';
 
@@ -135,12 +136,14 @@ export default function App(){
       <button className={'tab '+(tab==='items'?'active':'')} onClick={()=>setTab('items')}>Items</button>
       <button className={'tab '+(tab==='auto'?'active':'')} onClick={()=>setTab('auto')}>Auto‑PO</button>
       <button className={'tab '+(tab==='settings'?'active':'')} onClick={()=>setTab('settings')}>Settings</button>
+      <button className={'tab '+(tab==='ocr'?'active':'')} onClick={()=>setTab('ocr')}>Scan Invoice></button>
     </div>
     <Importer/>
     {tab==='counts' && <Counts/>}
     {tab==='items' && <Items/>}
     {tab==='auto' && <AutoPO/>}
     {tab==='settings' && <Settings/>}
+    {tab==='ocr' && <InvoiceOCR/>}
     <style>{`
       .btn{padding:8px 12px;border:1px solid #000;background:#000;color:#fff;border-radius:10px;cursor:pointer}
       .tab{padding:8px 12px;border:1px solid #000;border-radius:10px;background:#fff}
