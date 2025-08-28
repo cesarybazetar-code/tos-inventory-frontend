@@ -1,160 +1,93 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState, useEffect } from "react";
 import InvoiceOCR from "./InvoiceOCR";
+import Login from "./Login";
+import AdminUsers from "./AdminUsers";
 
-/** ========================
- *  Config / Types
- *  =======================*/
-type Role = "admin" | "manager" | "viewer";
-type User = { id: number; email: string; name?: string; role: Role; active: boolean };
+// ---- API helper base ----
+const API_DEFAULT =
+  (import.meta as any).env?.VITE_API_BASE_URL ||
+  localStorage.getItem("VITE_API_BASE_URL") ||
+  "";
 
-type Item = { id: number; name: string; storage_area?: string; par?: number; inv_unit_price?: number; active?: boolean };
-type CountLine = { item_id: number; qty: number };
-type Count = { id: number; count_date: string; storage_area?: string; lines: CountLine[] };
-
-const ENV_BASE = (import.meta as any).env?.VITE_API_BASE_URL || "";
-const getBase = () => localStorage.getItem("VITE_API_BASE_URL") || ENV_BASE || "";
-
-/** Build headers that include Bearer token (if logged in) and/or x-admin-key (legacy) */
-const authHeaders = () => {
+function apiBase() {
+  return (localStorage.getItem("VITE_API_BASE_URL") || API_DEFAULT || "").replace(/\/$/, "");
+}
+function authHeaders() {
   const h: Record<string, string> = {};
-  const token = localStorage.getItem("token");
-  const adminKey = localStorage.getItem("admin_key");
-  if (token) h["Authorization"] = `Bearer ${token}`;
-  if (adminKey) h["x-admin-key"] = adminKey;
+  const token = localStorage.getItem("auth_token");
+  if (token) h["Authorization"] = "Bearer " + token;
+  const adminKey = localStorage.getItem("admin_key") || "";
+  if (adminKey) h["x-admin-key"] = adminKey; // still allow legacy flows
   return h;
-};
+}
 
-async function apiGet<T = any>(path: string): Promise<T> {
-  const r = await fetch(getBase() + path, { headers: authHeaders() });
+async function apiGet(path: string) {
+  const r = await fetch(apiBase() + path, { headers: authHeaders() });
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
-async function apiPost<T = any>(path: string, body: any): Promise<T> {
-  const r = await fetch(getBase() + path, {
+async function apiPost(path: string, body: any) {
+  const r = await fetch(apiBase() + path, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(await r.text());
+  if (!r.ok) {
+    const t = await r.text();
+    alert("Error: " + t);
+    throw new Error(t);
+  }
   return r.json();
 }
-async function apiUpload<T = any>(path: string, fd: FormData): Promise<T> {
-  const r = await fetch(getBase() + path, { method: "POST", headers: authHeaders(), body: fd });
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
 
-/** ========================
- *  Small helpers
- *  =======================*/
-const AREAS = [
-  "Cooking Line",
-  "Meat",
-  "Seafood",
-  "Dairy",
-  "Produce",
-  "Dry & Other",
-  "Freezer",
-  "Bev & Coffee",
-  "Grocery",
-];
+// ---- Types ----
+type Item = { id: number; name: string; storage_area?: string; par?: number; inv_unit_price?: number; active?: boolean };
+type CountLine = { item_id: number; qty: number };
 
-function useAuth() {
-  const [user, setUser] = useState<User | null>(() => {
-    const raw = localStorage.getItem("user");
-    try {
-      return raw ? (JSON.parse(raw) as User) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const loggedIn = !!user;
-  const hasRole = (...roles: Role[]) => (user ? roles.includes(user.role) : false);
-
-  const logout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    setUser(null);
-  };
-
-  return { user, setUser, loggedIn, hasRole, logout };
-}
-
-/** ========================
- *  Screens / Cards
- *  =======================*/
-function LoginCard({ onLoggedIn }: { onLoggedIn: (u: User) => void }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const submit = async () => {
-    setBusy(true);
-    setErr("");
-    try {
-      // FastAPI OAuth2PasswordRequestForm expects x-www-form-urlencoded
-      const body = new URLSearchParams();
-      body.set("username", email);
-      body.set("password", password);
-
-      const r = await fetch(getBase() + "/auth/login", {
-        method: "POST",
-        headers: authHeaders(), // allows admin_key path if you keep it enabled
-        body,
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.detail || "Login failed");
-      // save token + user
-      localStorage.setItem("token", data.access_token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-      onLoggedIn(data.user);
-    } catch (e: any) {
-      setErr(e.message || "Login failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <div className="card">
-      <h3>Login</h3>
-      <div className="row">
-        <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-        <input placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-      </div>
-      <button className="btn" onClick={submit} disabled={busy || !email || !password}>
-        {busy ? "Signing in…" : "Sign In"}
-      </button>
-      {err && <div style={{ color: "red", marginTop: 8 }}>{err}</div>}
-      <div className="muted" style={{ marginTop: 8 }}>
-        Tip: You can still set an Admin Key in Settings for maintenance access.
-      </div>
-    </div>
-  );
-}
-
-function Settings({ onChanged }: { onChanged: () => void }) {
-  const [api, setApi] = useState(localStorage.getItem("VITE_API_BASE_URL") || getBase());
+// ---- Screens ----
+function Settings({
+  onLogout,
+  loggedInAs,
+  role,
+}: {
+  onLogout: () => void;
+  loggedInAs?: string | null;
+  role?: string | null;
+}) {
+  const [api, setApi] = useState(localStorage.getItem("VITE_API_BASE_URL") || "");
   const [key, setKey] = useState(localStorage.getItem("admin_key") || "");
+
   const save = () => {
     if (api) localStorage.setItem("VITE_API_BASE_URL", api);
     else localStorage.removeItem("VITE_API_BASE_URL");
-    if (key) localStorage.setItem("admin_key", key);
-    else localStorage.removeItem("admin_key");
-    alert("Saved. Reloading the data.");
-    onChanged();
+    localStorage.setItem("admin_key", key);
+    alert("Saved. Reload the page.");
   };
   return (
     <div className="card">
       <h3>Settings</h3>
       <div className="row">
-        <input placeholder="API URL (Render)" value={api} onChange={(e) => setApi(e.target.value)} />
+        <input placeholder="API URL" value={api} onChange={(e) => setApi(e.target.value)} />
         <input placeholder="Admin Key (optional)" value={key} onChange={(e) => setKey(e.target.value)} />
+        <button className="btn" onClick={save}>
+          Save
+        </button>
       </div>
-      <button className="btn" onClick={save}>Save</button>
-      <div className="muted">API Base used right now: {getBase() || "(not set)"}</div>
+      <div className="muted">Paste your Render backend URL here.</div>
+      <div style={{ marginTop: 12 }}>
+        {loggedInAs ? (
+          <div className="row">
+            <div>
+              Logged in as <b>{loggedInAs}</b> ({role})
+            </div>
+            <button className="btn" onClick={onLogout}>
+              Log out
+            </button>
+          </div>
+        ) : (
+          <div className="muted">You are not logged in.</div>
+        )}
+      </div>
     </div>
   );
 }
@@ -164,12 +97,17 @@ function Importer() {
   const upload = async (file: File) => {
     const fd = new FormData();
     fd.append("file", file);
-    try {
-      const data = await apiUpload("/import/catalog", fd);
-      setMsg(`Imported ${data.created ?? 0} new, ${data.updated ?? 0} updated`);
-    } catch (e: any) {
-      setMsg(e.message || "Import failed");
+    const r = await fetch(apiBase() + "/import/catalog", {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      alert(JSON.stringify(data));
+      return;
     }
+    setMsg(`Imported ${data.created ?? 0} new, ${data.updated ?? 0} updated`);
   };
   return (
     <div className="card">
@@ -183,27 +121,43 @@ function Importer() {
 function Items() {
   const [items, setItems] = useState<Item[]>([]);
   const [name, setName] = useState("");
-  const [area, setArea] = useState(AREAS[0]);
+  const [area, setArea] = useState("Cooking Line");
   const [par, setPar] = useState(0);
-
-  const load = async () => setItems(await apiGet<Item[]>("/items"));
-  useEffect(() => { load(); }, []);
-
+  const load = async () => setItems(await apiGet("/items"));
+  useEffect(() => {
+    load();
+  }, []);
   const add = async () => {
     if (!name.trim()) return;
     await apiPost("/items", { name, storage_area: area, par });
-    setName(""); setPar(0);
+    setName("");
+    setPar(0);
     load();
   };
-
   return (
     <div className="card">
       <h3>Items (Add / Add Location)</h3>
       <div className="row">
         <input placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} />
         <input placeholder="PAR" type="number" value={par} onChange={(e) => setPar(parseFloat(e.target.value || "0"))} />
-        <select value={area} onChange={(e) => setArea(e.target.value)}>{AREAS.map((a) => <option key={a}>{a}</option>)}</select>
-        <button className="btn" onClick={add}>Add / Add Location</button>
+        <select value={area} onChange={(e) => setArea(e.target.value)}>
+          {[
+            "Cooking Line",
+            "Meat",
+            "Seafood",
+            "Dairy",
+            "Produce",
+            "Dry & Other",
+            "Freezer",
+            "Bev & Coffee",
+            "Grocery",
+          ].map((a) => (
+            <option key={a}>{a}</option>
+          ))}
+        </select>
+        <button className="btn" onClick={add}>
+          Add / Add Location
+        </button>
       </div>
       {items.map((i) => (
         <div key={i.id} className="card small">
@@ -216,19 +170,21 @@ function Items() {
 
 function Counts() {
   const [items, setItems] = useState<Item[]>([]);
-  const [area, setArea] = useState(AREAS[0]);
+  const [area, setArea] = useState("Cooking Line");
   const [lines, setLines] = useState<Record<number, number>>({});
   const [newName, setNewName] = useState("");
   const [newPar, setNewPar] = useState(0);
 
-  const load = async () => setItems(await apiGet<Item[]>("/items?area=" + encodeURIComponent(area)));
-  useEffect(() => { load(); }, [area]);
+  const load = async () => setItems(await apiGet("/items?area=" + encodeURIComponent(area)));
+  useEffect(() => {
+    load();
+  }, [area]);
 
   const save = async () => {
     const payload = {
       storage_area: area,
       lines: Object.entries(lines)
-        .filter(([, q]) => (parseFloat(q as any) || 0) > 0)
+        .filter(([_, q]) => (parseFloat(q as any) || 0) > 0)
         .map(([id, qty]) => ({ item_id: parseInt(id), qty: Number(qty) })),
     };
     await apiPost("/counts", payload);
@@ -239,7 +195,8 @@ function Counts() {
   const quickAdd = async () => {
     if (!newName.trim()) return;
     await apiPost("/items", { name: newName.trim(), storage_area: area, par: newPar || 0 });
-    setNewName(""); setNewPar(0);
+    setNewName("");
+    setNewPar(0);
     load();
   };
 
@@ -247,14 +204,38 @@ function Counts() {
     <div className="card">
       <h3>Counts — {area}</h3>
       <div className="row">
-        <select value={area} onChange={(e) => setArea(e.target.value)}>{AREAS.map((a) => <option key={a}>{a}</option>)}</select>
-        <button className="btn" onClick={save}>Save Count</button>
+        <select value={area} onChange={(e) => setArea(e.target.value)}>
+          {[
+            "Cooking Line",
+            "Meat",
+            "Seafood",
+            "Dairy",
+            "Produce",
+            "Dry & Other",
+            "Freezer",
+            "Bev & Coffee",
+            "Grocery",
+          ].map((a) => (
+            <option key={a}>{a}</option>
+          ))}
+        </select>
+        <button className="btn" onClick={save}>
+          Save Count
+        </button>
       </div>
 
       <div className="row">
         <input placeholder="Add new item here" value={newName} onChange={(e) => setNewName(e.target.value)} />
-        <input placeholder="PAR (optional)" type="number" value={newPar} onChange={(e) => setNewPar(parseFloat(e.target.value || "0"))} />
-        <div></div><button className="btn" onClick={quickAdd}>Add Item Here</button>
+        <input
+          placeholder="PAR (optional)"
+          type="number"
+          value={newPar}
+          onChange={(e) => setNewPar(parseFloat(e.target.value || "0"))}
+        />
+        <div></div>
+        <button className="btn" onClick={quickAdd}>
+          Add Item Here
+        </button>
       </div>
 
       {items.map((i) => (
@@ -262,7 +243,7 @@ function Counts() {
           <div>{i.name}</div>
           <input
             type="number"
-            value={lines[i.id] ?? ""}
+            value={lines[i.id] || ""}
             onChange={(e) => setLines((prev) => ({ ...prev, [i.id]: parseFloat(e.target.value || "0") }))}
           />
         </div>
@@ -273,88 +254,128 @@ function Counts() {
 }
 
 function AutoPO() {
-  const [area, setArea] = useState(AREAS[0]);
+  const [area, setArea] = useState("Cooking Line");
   const [rows, setRows] = useState<any[]>([]);
   const run = async () => {
-    const data = await apiGet<{ lines: any[] }>(`/auto-po?storage_area=${encodeURIComponent(area)}`);
+    const data = await apiGet(`/auto-po?storage_area=${encodeURIComponent(area)}`);
     setRows(data.lines || []);
   };
-  useEffect(() => { run(); }, [area]);
-
+  useEffect(() => {
+    run();
+  }, [area]);
   return (
     <div className="card">
       <h3>Auto-PO</h3>
       <div className="row">
-        <select value={area} onChange={(e) => setArea(e.target.value)}>{AREAS.map((a) => <option key={a}>{a}</option>)}</select>
-        <button className="btn" onClick={run}>Refresh</button>
+        <select value={area} onChange={(e) => setArea(e.target.value)}>
+          {[
+            "Cooking Line",
+            "Meat",
+            "Seafood",
+            "Dairy",
+            "Produce",
+            "Dry & Other",
+            "Freezer",
+            "Bev & Coffee",
+            "Grocery",
+          ].map((a) => (
+            <option key={a}>{a}</option>
+          ))}
+        </select>
+        <button className="btn" onClick={run}>
+          Refresh
+        </button>
       </div>
       <table>
-        <thead><tr><th>Item</th><th>Area</th><th>On Hand</th><th>PAR</th><th>Suggested</th></tr></thead>
-        <tbody>{rows.map((r, i) => (
-          <tr key={i}><td>{r.name}</td><td>{r.storage_area || "-"}</td><td>{r.on_hand}</td><td>{r.par}</td><td>{r.suggested_order_qty}</td></tr>
-        ))}</tbody>
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Area</th>
+            <th>On Hand</th>
+            <th>PAR</th>
+            <th>Suggested</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i}>
+              <td>{r.name}</td>
+              <td>{r.storage_area || "-"}</td>
+              <td>{r.on_hand}</td>
+              <td>{r.par}</td>
+              <td>{r.suggested_order_qty}</td>
+            </tr>
+          ))}
+        </tbody>
       </table>
     </div>
   );
 }
 
-/** ========================
- *  App
- *  =======================*/
+// ---- App root ----
+type Tab = "counts" | "items" | "auto" | "settings" | "ocr" | "login" | "users";
+
 export default function App() {
-  const [tab, setTab] = useState<"counts" | "items" | "auto" | "settings" | "ocr" | "login">("counts");
-  const { user, setUser, loggedIn, hasRole, logout } = useAuth();
+  const [tab, setTab] = useState<Tab>("counts");
+  const [userEmail, setUserEmail] = useState<string | null>(localStorage.getItem("user_email"));
+  const [userRole, setUserRole] = useState<string | null>(localStorage.getItem("user_role"));
 
-  // When base URL changes in Settings, soft reload some data by flipping state
-  const [, force] = useState(0);
-  const forceReload = () => force((x) => x + 1);
+  const onLogin = (_token: string, user: { email: string; role: string }) => {
+    setUserEmail(user.email);
+    setUserRole(user.role);
+    setTab("counts");
+  };
 
-  // Decide which tabs are visible
-  const tabs = useMemo(() => {
-    const base = [
-      { id: "counts", label: "Counts", show: true },
-      { id: "items", label: "Items", show: loggedIn && hasRole("admin", "manager") },
-      { id: "auto", label: "Auto-PO", show: true },
-      { id: "ocr", label: "Scan Invoice", show: loggedIn && hasRole("admin", "manager") },
-      { id: "settings", label: "Settings", show: true },
-    ] as { id: any; label: string; show: boolean }[];
-    if (!loggedIn) base.push({ id: "login", label: "Login", show: true });
-    return base.filter((t) => t.show);
-  }, [loggedIn, hasRole]);
+  const logout = () => {
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("user_email");
+    localStorage.removeItem("user_role");
+    setUserEmail(null);
+    setUserRole(null);
+    setTab("login");
+  };
 
   return (
     <div style={{ fontFamily: "system-ui,-apple-system,Segoe UI,Roboto,Arial", margin: "16px" }}>
       <h1>TOS Inventory</h1>
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
-        {tabs.map((t) => (
-          <button key={t.id} className={"tab " + (tab === t.id ? "active" : "")} onClick={() => setTab(t.id)}>
-            {t.label}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        <button className={"tab " + (tab === "counts" ? "active" : "")} onClick={() => setTab("counts")}>
+          Counts
+        </button>
+        <button className={"tab " + (tab === "items" ? "active" : "")} onClick={() => setTab("items")}>
+          Items
+        </button>
+        <button className={"tab " + (tab === "auto" ? "active" : "")} onClick={() => setTab("auto")}>
+          Auto-PO
+        </button>
+        <button className={"tab " + (tab === "settings" ? "active" : "")} onClick={() => setTab("settings")}>
+          Settings
+        </button>
+        <button className={"tab " + (tab === "ocr" ? "active" : "")} onClick={() => setTab("ocr")}>
+          Scan Invoice
+        </button>
+        {!userEmail && (
+          <button className={"tab " + (tab === "login" ? "active" : "")} onClick={() => setTab("login")}>
+            Login
           </button>
-        ))}
-        <div style={{ marginLeft: "auto" }}>
-          {loggedIn ? (
-            <span className="muted">
-              {user?.name || user?.email} ({user?.role}) ·{" "}
-              <a href="#" onClick={(e) => { e.preventDefault(); logout(); setTab("login"); }}>
-                Logout
-              </a>
-            </span>
-          ) : (
-            <span className="muted">Not signed in</span>
-          )}
-        </div>
+        )}
+        {userRole === "admin" && (
+          <button className={"tab " + (tab === "users" ? "active" : "")} onClick={() => setTab("users")}>
+            Users
+          </button>
+        )}
       </div>
 
-      {/* Power-user card: CSV Import (only Admin/Manager) */}
-      {loggedIn && hasRole("admin", "manager") && <Importer />}
+      {/* Keep importer visible above (like before) */}
+      <Importer />
 
-      {tab === "login" && <LoginCard onLoggedIn={(u) => { setUser(u); setTab("counts"); }} />}
       {tab === "counts" && <Counts />}
-      {tab === "items" && (loggedIn && hasRole("admin", "manager") ? <Items /> : <div className="card">No access.</div>)}
+      {tab === "items" && <Items />}
       {tab === "auto" && <AutoPO />}
-      {tab === "settings" && <Settings onChanged={forceReload} />}
-      {tab === "ocr" && (loggedIn && hasRole("admin", "manager") ? <InvoiceOCR /> : <div className="card">No access.</div>)}
+      {tab === "settings" && <Settings onLogout={logout} loggedInAs={userEmail} role={userRole} />}
+      {tab === "ocr" && <InvoiceOCR />}
+      {tab === "login" && <Login onLogin={onLogin} />}
+      {tab === "users" && userRole === "admin" && <AdminUsers />}
 
       <style>{`
         .btn{padding:8px 12px;border:1px solid #000;background:#000;color:#fff;border-radius:10px;cursor:pointer}
@@ -367,8 +388,7 @@ export default function App() {
         input,select{padding:8px;border:1px solid #cbd5e1;border-radius:10px}
         table{width:100%;border-collapse:collapse;margin-top:10px}
         th,td{padding:8px;border-top:1px solid #eee;text-align:left}
-        .muted{color:#6b7280}
-        a{color:inherit}
+        .muted{color:#6b7280;font-size:12px}
       `}</style>
     </div>
   );
