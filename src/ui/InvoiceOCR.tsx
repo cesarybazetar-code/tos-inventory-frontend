@@ -44,6 +44,7 @@ export default function InvoiceOCR() {
   const [receiver, setReceiver] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [selectedName, setSelectedName] = useState("");
 
   const upload = async (file: File) => {
     setLoading(true);
@@ -51,6 +52,7 @@ export default function InvoiceOCR() {
     try {
       const res: OCRResp = await postForm("/invoice/ocr", file);
       setLines(res?.lines || []);
+      if (!res?.lines?.length) setError("No lines detected. Try a clearer photo or screenshot.");
     } catch (e: any) {
       setError(e?.message || "OCR failed");
     } finally {
@@ -71,6 +73,7 @@ export default function InvoiceOCR() {
       alert("Received via OCR saved.");
       setLines([]);
       setReceiver("");
+      setSelectedName("");
     } catch (e: any) {
       alert(e?.message || "Error saving OCR receipt");
     }
@@ -84,18 +87,37 @@ export default function InvoiceOCR() {
   return (
     <div className="card">
       <h3>Scan Invoice (Photo → Items)</h3>
+
       <div className="row">
-        <input
-          type="file"
-          accept="image/*,.pdf"
-          onChange={(e) => e.target.files && upload(e.target.files[0])}
-        />
+        {/* Upload button that triggers the iOS/Android chooser:
+           Take Photo / Choose from Library / Browse */}
+        <label className="btn" style={{ textAlign: "center" }}>
+          📸 Upload Invoice
+          <input
+            type="file"
+            accept="image/*"               // <-- ensures the popup with Camera / Library / Files
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              setSelectedName(f.name || "photo");
+              upload(f);
+            }}
+          />
+        </label>
+
         <input
           placeholder="Receiver name"
           value={receiver}
           onChange={(e) => setReceiver(e.target.value)}
         />
       </div>
+
+      {!!selectedName && (
+        <div className="muted" style={{ marginTop: 4 }}>
+          Selected: {selectedName}
+        </div>
+      )}
 
       {loading && <div>Reading…</div>}
       {error && <div style={{ color: "red" }}>{error}</div>}
