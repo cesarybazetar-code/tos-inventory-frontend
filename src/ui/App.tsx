@@ -136,7 +136,9 @@ export default function App(){
       <button className={'tab '+(tab==='items'?'active':'')} onClick={()=>setTab('items')}>Items</button>
       <button className={'tab '+(tab==='auto'?'active':'')} onClick={()=>setTab('auto')}>Auto‑PO</button>
       <button className={'tab '+(tab==='settings'?'active':'')} onClick={()=>setTab('settings')}>Settings</button>
-      <button className={'tab '+(tab==='ocr'?'active':'')} onClick={()=>setTab('ocr')}>Scan Invoice></button>
+      <button className={'tab '+(tab==='ocr'?'active':'')} onClick={()=>setTab('ocr')}>
+  Scan Invoice
+</button>
     </div>
     <Importer/>
     {tab==='counts' && <Counts/>}
