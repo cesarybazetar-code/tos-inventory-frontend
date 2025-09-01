@@ -394,16 +394,23 @@ export default function App(){
      allowedTabs.includes('users') ? 'users' : 'settings') as any
   );
 
-  if(!token){
-    return (
-      <div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
-        <h1>TOS Inventory</h1>
-        <Login onLogin={()=>window.location.reload()} />
-        <div className="muted" style={{marginTop:8}}>API: {getApiBase() || '(set in Settings)'}</div>
+  if (!token) {
+  return (
+    <div style={{fontFamily:'system-ui, -apple-system, Segoe UI, Roboto, Arial'}}>
+      {!backendUp && (
+        <div style={{background:'#fff3cd',border:'1px solid #ffeeba',padding:8,margin:'8px 0'}}>
+          Backend unreachable — check VITE_API_URL and CORS.
+        </div>
+      )}
+
+      <h1>TOS Inventory</h1>
+      <Login onLogin={() => window.location.reload()} />
+      <div className="muted" style={{marginTop:8}}>
         <style>{baseCss}</style>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   return (
     <div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
