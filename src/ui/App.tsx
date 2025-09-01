@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import InvoiceOCR from "./InvoiceOCR";
 
-// ✅ Siempre prioriza variables de entorno (Vercel) y si no, localStorage
+// ====== ENV + STORAGE DEFAULTS ======
 const API_DEFAULT =
   (import.meta as any).env?.VITE_API_BASE_URL ||
   localStorage.getItem('VITE_API_BASE_URL') ||
@@ -14,61 +14,139 @@ const ADMIN_KEY_DEFAULT =
 
 type Item = { id:number; name:string; storage_area?:string; par?:number; inv_unit_price?:number; active?:boolean }
 type CountLine = { item_id:number; qty:number }
-type Count = { id:number; count_date:string; storage_area?:string; lines:CountLine[] }
 
-async function apiGet(path:string){ 
-  const base = localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT; 
-  const r = await fetch(base + path, { headers: authHeaders() }); 
-  if(!r.ok){ throw new Error(await r.text()); }
-  return r.json(); 
-}
-async function apiPost(path:string, body:any){
-  const base = localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT;
-  const r = await fetch(base + path, { 
-    method:'POST', 
-    headers:{ 
-      'Content-Type':'application/json', 
-      'x-admin-key': localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT,
-      ...authHeaders()
-    }, 
-    body: JSON.stringify(body) 
-  });
-  if(!r.ok){ alert('Error: ' + (await r.text())); throw new Error('post failed'); }
-  return r.json();
-}
+// ====== AUTH HELPERS ======
 function authHeaders(){
   const t = localStorage.getItem('token');
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
+function getApiBase() {
+  return localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT;
+}
+function getAdminKey() {
+  return localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT;
+}
+async function apiGet(path:string){ 
+  const base = getApiBase();
+  const r = await fetch(base + path, { headers: { ...authHeaders() } }); 
+  if(!r.ok){ throw new Error(await r.text()); }
+  return r.json(); 
+}
+async function apiPost(path:string, body:any){
+  const base = getApiBase();
+  const r = await fetch(base + path, { 
+    method:'POST', 
+    headers:{ 
+      'Content-Type':'application/json', 
+      'x-admin-key': getAdminKey(),
+      ...authHeaders()
+    }, 
+    body: JSON.stringify(body) 
+  });
+  if(!r.ok){ throw new Error(await r.text()); }
+  return r.json();
+}
+async function apiPut(path:string, body:any){
+  const base = getApiBase();
+  const r = await fetch(base + path, { 
+    method:'PUT', 
+    headers:{ 
+      'Content-Type':'application/json', 
+      'x-admin-key': getAdminKey(),
+      ...authHeaders()
+    }, 
+    body: JSON.stringify(body) 
+  });
+  if(!r.ok){ throw new Error(await r.text()); }
+  return r.json();
+}
 
+// ====== ROLE PERMISSIONS (UI) ======
+const rolePermissions: Record<string, Array<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>> = {
+  admin:   ['counts','items','auto','settings','ocr','users'],
+  manager: ['counts','items','auto','ocr'],
+  counter: ['counts'],
+};
+
+// ====== LOGIN PANEL ======
+function LoginPanel(){
+  const [email, setEmail] = useState(localStorage.getItem('last_email') || '');
+  const [password, setPassword] = useState('');
+  const [loading,setLoading] = useState(false);
+  const [error,setError] = useState('');
+
+  const login = async ()=>{
+    setLoading(true); setError('');
+    try{
+      const base = getApiBase();
+      const form = new URLSearchParams();
+      form.set('username', email.trim().toLowerCase());
+      form.set('password', password);
+      const r = await fetch(base + '/auth/login', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+        body: form.toString()
+      });
+      if(!r.ok){
+        throw new Error(await r.text() || 'Login failed');
+      }
+      const data = await r.json();
+      localStorage.setItem('token', data.access_token);
+      localStorage.setItem('role', data.user.role);
+      localStorage.setItem('email', data.user.email);
+      localStorage.setItem('last_email', email.trim().toLowerCase());
+      window.location.reload();
+    }catch(e:any){
+      setError(e.message || 'Login failed');
+    }finally{
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{maxWidth:480, margin:'40px auto'}}>
+      <h3>Log in</h3>
+      <div className="row">
+        <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+        <input placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+      </div>
+      {error && <div style={{color:'red'}}>{error}</div>}
+      <div className="row">
+        <button className="btn" onClick={login} disabled={loading}>{loading?'Signing in…':'Sign in'}</button>
+      </div>
+      <div className="muted">API: {getApiBase() || '(set in env)'}</div>
+    </div>
+  );
+}
+
+// ====== SETTINGS (solo admin) ======
 function Settings(){
   const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
   const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
-
   const save = ()=>{
     if(api) localStorage.setItem('VITE_API_BASE_URL', api); else localStorage.removeItem('VITE_API_BASE_URL');
     if(key) localStorage.setItem('admin_key', key); else localStorage.removeItem('admin_key');
     alert('Saved. Reload the page.');
   }
-
   return (<div className="card"><h3>Settings</h3>
     <div className="row">
       <input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
       <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
       <button className="btn screen-only" onClick={save}>Save</button>
     </div>
-    <div className="muted">Env values are loaded from Vercel first. You can override here if needed.</div>
+    <div className="muted">Env values (Vercel) son la base; aquí puedes sobreescribir si necesitas probar algo.</div>
   </div>)
 }
 
+// ====== IMPORTER (admin/manager) ======
 function Importer(){
   const [msg,setMsg]=useState('');
   const upload = async (file:File)=>{
-    const base = localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT;
+    const base = getApiBase();
     const fd = new FormData(); fd.append('file', file);
     const r = await fetch(base + '/import/catalog', { 
       method:'POST', 
-      headers:{ 'x-admin-key': localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT, ...authHeaders() }, 
+      headers:{ 'x-admin-key': getAdminKey(), ...authHeaders() }, 
       body: fd 
     });
     const data = await r.json();
@@ -80,6 +158,7 @@ function Importer(){
     <div className="muted">{msg}</div></div>)
 }
 
+// ====== ITEMS (admin/manager) ======
 function Items(){
   const [items,setItems]=useState<Item[]>([]); 
   const [name,setName]=useState(''); 
@@ -105,6 +184,7 @@ function Items(){
   </div>)
 }
 
+// ====== COUNTS (todos los roles) ======
 function Counts(){
   const [items,setItems]=useState<Item[]>([]); 
   const [area,setArea]=useState('Cooking Line'); 
@@ -126,6 +206,9 @@ function Counts(){
     setNewName(''); setNewPar(0); load();
   }
 
+  const role = localStorage.getItem('role') || 'counter';
+  const canQuickAdd = role === 'admin' || role === 'manager';
+
   return (<div className="card">
     <div className="header screen-only" style={{display:'flex',gap:12,alignItems:'center',justifyContent:'space-between'}}>
       <div style={{display:'flex',gap:12,alignItems:'center'}}>
@@ -138,11 +221,13 @@ function Counts(){
       <button className="btn" onClick={()=>window.print()}>🖨️ Print</button>
     </div>
 
-    <div className="row screen-only">
-      <input placeholder="Add new item here" value={newName} onChange={e=>setNewName(e.target.value)} />
-      <input placeholder="PAR (optional)" type="number" value={newPar} onChange={e=>setNewPar(parseFloat(e.target.value||'0'))} />
-      <div></div><button className="btn" onClick={quickAdd}>Add Item Here</button>
-    </div>
+    {canQuickAdd && (
+      <div className="row screen-only">
+        <input placeholder="Add new item here" value={newName} onChange={e=>setNewName(e.target.value)} />
+        <input placeholder="PAR (optional)" type="number" value={newPar} onChange={e=>setNewPar(parseFloat(e.target.value||'0'))} />
+        <div></div><button className="btn" onClick={quickAdd}>Add Item Here</button>
+      </div>
+    )}
 
     <table className="print-table">
       <thead>
@@ -174,6 +259,7 @@ function Counts(){
   </div>)
 }
 
+// ====== AUTO PO (admin/manager) ======
 function AutoPO(){
   const [area,setArea]=useState('Cooking Line'); const [rows,setRows]=useState<any[]>([]);
   const run = async()=>{ const data = await apiGet(`/auto-po?storage_area=${encodeURIComponent(area)}`); setRows(data.lines||[]); }
@@ -187,45 +273,200 @@ function AutoPO(){
     </table></div>)
 }
 
-export default function App(){
-  const [tab,setTab]=useState<'counts'|'items'|'auto'|'settings'|'ocr'>('counts')
-  return (<div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
-    <h1>TOS Inventory</h1>
-    <div className="screen-only" style={{display:'flex',gap:8,marginBottom:12}}>
-      <button className={'tab '+(tab==='counts'?'active':'')} onClick={()=>setTab('counts')}>Counts</button>
-      <button className={'tab '+(tab==='items'?'active':'')} onClick={()=>setTab('items')}>Items</button>
-      <button className={'tab '+(tab==='auto'?'active':'')} onClick={()=>setTab('auto')}>Auto-PO</button>
-      <button className={'tab '+(tab==='settings'?'active':'')} onClick={()=>setTab('settings')}>Settings</button>
-      <button className={'tab '+(tab==='ocr'?'active':'')} onClick={()=>setTab('ocr')}>Scan Invoice</button>
+// ====== USERS (solo admin) ======
+type UserRow = { id:number; email:string; name?:string; role:'admin'|'manager'|'counter'; active:boolean }
+
+function UsersAdmin(){
+  const [users,setUsers]=useState<UserRow[]>([]);
+  const [email,setEmail]=useState('');
+  const [name,setName]=useState('');
+  const [password,setPassword]=useState('');
+  const [role,setRole]=useState<'admin'|'manager'|'counter'>('counter');
+  const [error,setError]=useState('');
+
+  const load = async()=>{
+    try{
+      const res = await apiGet('/auth/users');
+      setUsers(res);
+    }catch(e:any){ setError(e.message||'Error loading users'); }
+  };
+  useEffect(()=>{load();},[]);
+
+  const createUser = async()=>{
+    setError('');
+    try{
+      await apiPost('/auth/register', { email: email.trim().toLowerCase(), password, name, role });
+      setEmail(''); setPassword(''); setName(''); setRole('counter');
+      await load();
+      alert('User created');
+    }catch(e:any){ setError(e.message||'Error creating user'); }
+  };
+
+  const updateUser = async (u:UserRow, patch:Partial<UserRow> & {password?:string})=>{
+    setError('');
+    try{
+      const body:any = {};
+      if(patch.name !== undefined) body.name = patch.name;
+      if(patch.role !== undefined) body.role = patch.role;
+      if(patch.active !== undefined) body.active = patch.active;
+      if((patch as any).password) body.password = (patch as any).password;
+      await apiPut(`/auth/users/${u.id}`, body);
+      await load();
+    }catch(e:any){ setError(e.message||'Error updating user'); }
+  };
+
+  return (
+    <div className="card">
+      <h3>Users</h3>
+      {error && <div style={{color:'red'}}>{error}</div>}
+
+      <div className="row">
+        <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+        <input placeholder="Name"  value={name}  onChange={e=>setName(e.target.value)} />
+      </div>
+      <div className="row">
+        <input placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+        <select value={role} onChange={e=>setRole(e.target.value as any)}>
+          <option value="counter">counter</option>
+          <option value="manager">manager</option>
+          <option value="admin">admin</option>
+        </select>
+      </div>
+      <div className="row">
+        <button className="btn" onClick={createUser}>Create user</button>
+      </div>
+
+      <table style={{width:'100%', borderCollapse:'collapse', marginTop:10}}>
+        <thead>
+          <tr>
+            <th>Email</th><th>Name</th><th>Role</th><th>Active</th><th>Reset PW</th>
+          </tr>
+        </thead>
+        <tbody>
+          {users.map(u=>(
+            <tr key={u.id}>
+              <td>{u.email}</td>
+              <td>
+                <input value={u.name||''} onChange={e=>updateUser(u,{name:e.target.value})}/>
+              </td>
+              <td>
+                <select value={u.role} onChange={e=>updateUser(u,{role:e.target.value as any})}>
+                  <option value="counter">counter</option>
+                  <option value="manager">manager</option>
+                  <option value="admin">admin</option>
+                </select>
+              </td>
+              <td>
+                <input type="checkbox" checked={u.active} onChange={e=>updateUser(u,{active:e.target.checked})}/>
+              </td>
+              <td>
+                <button className="btn" onClick={()=>{
+                  const pw = prompt('New password for '+u.email);
+                  if(pw){ updateUser(u,{password:pw}); }
+                }}>Set</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-    <Importer/>
-    {tab==='counts' && <Counts/>}
-    {tab==='items' && <Items/>}
-    {tab==='auto' && <AutoPO/>}
-    {tab==='settings' && <Settings/>}
-    {tab==='ocr' && <InvoiceOCR/>}
-
-    <style>{`
-      .btn{padding:8px 12px;border:1px solid #000;background:#000;color:#fff;border-radius:10px;cursor:pointer}
-      .tab{padding:8px 12px;border:1px solid #000;border-radius:10px;background:#fff}
-      .tab.active{background:#000;color:#fff}
-      .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:10px 0}
-      .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0}
-      input,select{padding:8px;border:1px solid #cbd5e1;border-radius:10px}
-      table{width:100%;border-collapse:collapse;margin-top:10px}
-      th,td{padding:8px;border-top:1px solid #eee;text-align:left}
-      .muted{color:#6b7280}
-      .paper-only{display:none}
-
-      @media print{
-        body{margin:0}
-        .screen-only{display:none !important}
-        .card{border:none;padding:0;margin:0}
-        .tab, .btn{display:none !important}
-        .print-table{width:100%;border-collapse:collapse}
-        .print-table th, .print-table td{border:1px solid #000;padding:6px}
-        .paper-only{display:table-cell}
-      }
-    `}</style>
-  </div>)
+  )
 }
+
+// ====== TOP BAR ======
+function TopBar({tab,setTab,allowedTabs}:{tab:string,setTab:(t:any)=>void,allowedTabs:Array<string>}){
+  const email = localStorage.getItem('email') || '';
+  const role  = localStorage.getItem('role') || 'counter';
+  const logout = ()=>{
+    localStorage.removeItem('token');
+    localStorage.removeItem('role');
+    window.location.reload();
+  };
+
+  const TabBtn = ({id,label}:{id:any,label:string}) => (
+    allowedTabs.includes(id) ? (
+      <button className={'tab '+(tab===id?'active':'')} onClick={()=>setTab(id)}>{label}</button>
+    ) : null
+  );
+
+  return (
+    <div className="screen-only" style={{display:'flex',gap:8,marginBottom:12,alignItems:'center',justifyContent:'space-between'}}>
+      <div style={{display:'flex',gap:8}}>
+        <TabBtn id="counts" label="Counts" />
+        <TabBtn id="items"  label="Items" />
+        <TabBtn id="auto"   label="Auto-PO" />
+        <TabBtn id="ocr"    label="Scan Invoice" />
+        <TabBtn id="users"  label="Users" />
+        <TabBtn id="settings" label="Settings" />
+      </div>
+      <div className="muted" style={{display:'flex',gap:8,alignItems:'center'}}>
+        <span>{email} ({role})</span>
+        <button className="btn" onClick={logout}>Logout</button>
+      </div>
+    </div>
+  );
+}
+
+// ====== APP ROOT ======
+export default function App(){
+  const token = localStorage.getItem('token');
+  const role  = localStorage.getItem('role') || 'counter';
+  const allowedTabs = rolePermissions[role] || ['counts'];
+
+  const [tab,setTab]=useState<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>(
+    (allowedTabs.includes('counts') ? 'counts' :
+     allowedTabs.includes('items') ? 'items' :
+     allowedTabs.includes('auto') ? 'auto' :
+     allowedTabs.includes('ocr') ? 'ocr' :
+     allowedTabs.includes('users') ? 'users' : 'settings') as any
+  );
+
+  if(!token){
+    return (
+      <div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
+        <h1>TOS Inventory</h1>
+        <LoginPanel/>
+        <style>{baseCss}</style>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
+      <h1>TOS Inventory</h1>
+      <TopBar tab={tab} setTab={setTab} allowedTabs={allowedTabs}/>
+      {(role==='admin' || role==='manager') && <Importer/>}
+      {tab==='counts'   && <Counts/>}
+      {tab==='items'    && (role==='admin' || role==='manager') && <Items/>}
+      {tab==='auto'     && (role==='admin' || role==='manager') && <AutoPO/>}
+      {tab==='ocr'      && (role==='admin' || role==='manager') && <InvoiceOCR/>}
+      {tab==='users'    && (role==='admin') && <UsersAdmin/>}
+      {tab==='settings' && (role==='admin') && <Settings/>}
+      <style>{baseCss}</style>
+    </div>
+  )
+}
+
+// ====== CSS ======
+const baseCss = `
+  .btn{padding:8px 12px;border:1px solid #000;background:#000;color:#fff;border-radius:10px;cursor:pointer}
+  .tab{padding:8px 12px;border:1px solid #000;border-radius:10px;background:#fff}
+  .tab.active{background:#000;color:#fff}
+  .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:10px 0}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0}
+  input,select{padding:8px;border:1px solid #cbd5e1;border-radius:10px}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th,td{padding:8px;border-top:1px solid #eee;text-align:left}
+  .muted{color:#6b7280}
+  .paper-only{display:none}
+
+  @media print{
+    body{margin:0}
+    .screen-only{display:none !important}
+    .card{border:none;padding:0;margin:0}
+    .tab, .btn{display:none !important}
+    .print-table{width:100%;border-collapse:collapse}
+    .print-table th, .print-table td{border:1px solid #000;padding:6px}
+    .paper-only{display:table-cell}
+  }
+`;
