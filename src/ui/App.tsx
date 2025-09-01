@@ -380,6 +380,13 @@ export default function App(){
   const allowedTabs = rolePermissions[role] || ['counts'];
 
   const [tab,setTab]=useState<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>(
+
+  // backend connectivity banner (hooks must be INSIDE the component)
+  const [backendUp, setBackendUp] = useState(true);
+  useEffect(() => {
+    import('../lib/ping').then(mod => mod.ping().then(ok => setBackendUp(ok)));
+  }, []);
+
     (allowedTabs.includes('counts') ? 'counts' :
      allowedTabs.includes('items') ? 'items' :
      allowedTabs.includes('auto') ? 'auto' :
