@@ -1,7 +1,16 @@
 import React, { useState, useEffect } from 'react'
 import InvoiceOCR from "./InvoiceOCR";
 
-const API_DEFAULT = (import.meta as any).env?.VITE_API_BASE_URL || localStorage.getItem('VITE_API_BASE_URL') || '';
+// ✅ Siempre prioriza variables de entorno (Vercel) y si no, localStorage
+const API_DEFAULT =
+  (import.meta as any).env?.VITE_API_BASE_URL ||
+  localStorage.getItem('VITE_API_BASE_URL') ||
+  '';
+
+const ADMIN_KEY_DEFAULT =
+  (import.meta as any).env?.VITE_ADMIN_KEY ||
+  localStorage.getItem('admin_key') ||
+  '';
 
 type Item = { id:number; name:string; storage_area?:string; par?:number; inv_unit_price?:number; active?:boolean }
 type CountLine = { item_id:number; qty:number }
@@ -19,7 +28,7 @@ async function apiPost(path:string, body:any){
     method:'POST', 
     headers:{ 
       'Content-Type':'application/json', 
-      'x-admin-key': localStorage.getItem('admin_key') || '',
+      'x-admin-key': localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT,
       ...authHeaders()
     }, 
     body: JSON.stringify(body) 
@@ -33,18 +42,23 @@ function authHeaders(){
 }
 
 function Settings(){
-  const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || '');
-  const [key, setKey] = useState(localStorage.getItem('admin_key') || '');
+  const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
+  const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
+
   const save = ()=>{
     if(api) localStorage.setItem('VITE_API_BASE_URL', api); else localStorage.removeItem('VITE_API_BASE_URL');
-    localStorage.setItem('admin_key', key);
+    if(key) localStorage.setItem('admin_key', key); else localStorage.removeItem('admin_key');
     alert('Saved. Reload the page.');
   }
+
   return (<div className="card"><h3>Settings</h3>
-    <div className="row"><input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
-    <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
-    <button className="btn screen-only" onClick={save}>Save</button></div>
-    <div className="muted">Paste your API URL from Render here.</div></div>)
+    <div className="row">
+      <input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
+      <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
+      <button className="btn screen-only" onClick={save}>Save</button>
+    </div>
+    <div className="muted">Env values are loaded from Vercel first. You can override here if needed.</div>
+  </div>)
 }
 
 function Importer(){
@@ -54,7 +68,7 @@ function Importer(){
     const fd = new FormData(); fd.append('file', file);
     const r = await fetch(base + '/import/catalog', { 
       method:'POST', 
-      headers:{ 'x-admin-key': localStorage.getItem('admin_key') || '', ...authHeaders() }, 
+      headers:{ 'x-admin-key': localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT, ...authHeaders() }, 
       body: fd 
     });
     const data = await r.json();
@@ -124,14 +138,12 @@ function Counts(){
       <button className="btn" onClick={()=>window.print()}>🖨️ Print</button>
     </div>
 
-    {/* quick add (screen only) */}
     <div className="row screen-only">
       <input placeholder="Add new item here" value={newName} onChange={e=>setNewName(e.target.value)} />
       <input placeholder="PAR (optional)" type="number" value={newPar} onChange={e=>setNewPar(parseFloat(e.target.value||'0'))} />
       <div></div><button className="btn" onClick={quickAdd}>Add Item Here</button>
     </div>
 
-    {/* printable table */}
     <table className="print-table">
       <thead>
         <tr>
@@ -203,10 +215,8 @@ export default function App(){
       table{width:100%;border-collapse:collapse;margin-top:10px}
       th,td{padding:8px;border-top:1px solid #eee;text-align:left}
       .muted{color:#6b7280}
-      /* print helpers */
       .paper-only{display:none}
 
-      /* PRINT LAYOUT */
       @media print{
         body{margin:0}
         .screen-only{display:none !important}
