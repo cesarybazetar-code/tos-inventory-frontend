@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 
 const API_DEFAULT =
-  (import.meta as any).env?.VITE_API_BASE_URL ||
+  (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL ||
   localStorage.getItem("VITE_API_BASE_URL") ||
   "";
 

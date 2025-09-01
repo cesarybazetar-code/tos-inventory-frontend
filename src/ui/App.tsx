@@ -4,7 +4,7 @@ import Login from "./Login"; // tu Login.tsx (usa onLogin)
 
 // ====== ENV + STORAGE DEFAULTS ======
 const API_DEFAULT =
-  (import.meta as any).env?.VITE_API_BASE_URL ||
+  (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL ||
   localStorage.getItem('VITE_API_BASE_URL') ||
   '';
 
@@ -14,6 +14,12 @@ const ADMIN_KEY_DEFAULT =
   '';
 
 type Item = { id:number; name:string; storage_area?:string; par?:number; inv_unit_price?:number; active?:boolean }
+
+  const [backendUp, setBackendUp] = useState<boolean>(true);
+  useEffect(()=>{ 
+    import('../lib/ping').then(mod => mod.ping().then(ok => setBackendUp(ok)));
+  }, []);
+
 
 // ====== AUTH HELPERS ======
 function authHeaders(){
