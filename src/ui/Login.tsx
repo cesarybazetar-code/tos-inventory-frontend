@@ -1,5 +1,10 @@
 import React, { useState } from "react";
 
+const API_DEFAULT =
+  (import.meta as any).env?.VITE_API_BASE_URL ||
+  localStorage.getItem("VITE_API_BASE_URL") ||
+  "";
+
 export default function Login({ onLogin }: { onLogin: () => void }) {
   const [email,setEmail] = useState(localStorage.getItem("last_email") || "");
   const [password,setPassword] = useState("");
@@ -7,10 +12,13 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
 
   const submit = async ()=>{
     try {
-      const base = localStorage.getItem("VITE_API_BASE_URL") || "";
+      const base = API_DEFAULT; // <- ahora toma env o localStorage
+      if (!base) { throw new Error("Configura el API URL en Settings o Vercel"); }
+
       const fd = new URLSearchParams();
       fd.append("username", email.trim().toLowerCase());
       fd.append("password", password);
+
       const r = await fetch(base + "/auth/login", {
         method:"POST",
         headers: { "Content-Type":"application/x-www-form-urlencoded" },
@@ -39,6 +47,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
       <div className="row">
         <button className="btn" onClick={submit}>Sign in</button>
       </div>
+      <div className="muted">API: {API_DEFAULT || '(no configurado)'}</div>
     </div>
   );
 }
