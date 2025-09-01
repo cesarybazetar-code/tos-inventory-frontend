@@ -412,20 +412,30 @@ export default function App(){
   );
 }
 
-  return (
-    <div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
-      <h1>TOS Inventory</h1>
-      <TopBar tab={tab} setTab={setTab} allowedTabs={allowedTabs}/>
-      {(role==='admin' || role==='manager') && <Importer/>}
-      {tab==='counts'   && <Counts/>}
-      {tab==='items'    && (role==='admin' || role==='manager') && <Items/>}
-      {tab==='auto'     && (role==='admin' || role==='manager') && <AutoPO/>}
-      {tab==='ocr'      && (role==='admin' || role==='manager') && <InvoiceOCR/>}
-      {tab==='users'    && (role==='admin') && <UsersAdmin/>}
-      {tab==='settings' && (role==='admin') && <Settings/>}
-      <style>{baseCss}</style>
-    </div>
-  )
+  
+return (
+  <div style={{fontFamily:'system-ui, -apple-system, Segoe UI, Roboto, Arial'}}>
+    {!backendUp && (
+      <div style={{background:'#fff3cd',border:'1px solid #ffeeba',padding:8,margin:'8px 0'}}>
+        Backend unreachable — check VITE_API_URL and CORS.
+      </div>
+    )}
+
+    <h1>TOS Inventory</h1>
+    <TopBar tab={tab} setTab={setTab} />
+    {(role==='admin' || role==='manager') && (
+      <>
+        {tab==='counts' && <Counts />}
+        {tab==='items' && <Items />}
+        {tab==='auto' && <Auto />}
+        {tab==='ocr' && <OCR />}
+        {tab==='users' && <Users />}
+        {tab==='settings' && <Settings />}
+      </>
+    )}
+    <style>{baseCss}</style>
+  </div>
+)
 }
 
 // ====== CSS ======
