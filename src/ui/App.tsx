@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import InvoiceOCR from "./InvoiceOCR";
-import Login from "./Login"; // <- usamos tu Login.tsx
+import Login from "./Login"; // tu Login.tsx (usa onLogin)
 
 // ====== ENV + STORAGE DEFAULTS ======
 const API_DEFAULT =
@@ -14,7 +14,6 @@ const ADMIN_KEY_DEFAULT =
   '';
 
 type Item = { id:number; name:string; storage_area?:string; par?:number; inv_unit_price?:number; active?:boolean }
-type CountLine = { item_id:number; qty:number }
 
 // ====== AUTH HELPERS ======
 function authHeaders(){
@@ -86,7 +85,7 @@ function Settings(){
       <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
       <button className="btn screen-only" onClick={save}>Save</button>
     </div>
-    <div className="muted">Las variables de entorno son la base; aquí puedes sobreescribir si necesitas probar algo.</div>
+    <div className="muted">Puedes fijar el API aquí si no viene por variable de entorno.</div>
   </div>)
 }
 
@@ -136,7 +135,7 @@ function Items(){
   </div>)
 }
 
-// ====== COUNTS (counter/manager/admin/viewer para ver; editar: counter/manager/admin) ======
+// ====== COUNTS ======
 function Counts(){
   const [items,setItems]=useState<Item[]>([]); 
   const [area,setArea]=useState('Cooking Line'); 
@@ -244,8 +243,7 @@ function UsersAdmin(){
 
   const load = async()=>{
     try{
-      // 🔁 NUEVAS RUTAS DE ADMIN:
-      const res = await apiGet('/admin/users');
+      const res = await apiGet('/admin/users'); // <- nuevas rutas admin
       setUsers(res);
     }catch(e:any){ setError(e.message||'Error loading users'); }
   };
@@ -269,8 +267,7 @@ function UsersAdmin(){
       if(patch.role !== undefined) body.role = patch.role;
       if(patch.active !== undefined) body.active = patch.active;
       if((patch as any).password) body.new_password = (patch as any).password;
-      // 🔁 NUEVA RUTA PUT:
-      await apiPut(`/admin/users/${u.id}`, body);
+      await apiPut(`/admin/users/${u.id}`, body); // <- PUT admin
       await load();
     }catch(e:any){ setError(e.message||'Error updating user'); }
   };
@@ -388,7 +385,8 @@ export default function App(){
     return (
       <div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
         <h1>TOS Inventory</h1>
-        <Login /> {/* Usa tu Login.tsx */}
+        <Login onLogin={()=>window.location.reload()} />
+        <div className="muted" style={{marginTop:8}}>API: {getApiBase() || '(set in Settings)'}</div>
         <style>{baseCss}</style>
       </div>
     );
