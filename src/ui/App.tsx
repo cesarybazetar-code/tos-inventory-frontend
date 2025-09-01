@@ -1,3 +1,22 @@
+import Login from "./Login";
+
+// ...
+
+export default function App(){
+  const token = localStorage.getItem("token");
+
+  if(!token){
+    return (
+      <div style={{fontFamily:"system-ui,-apple-system,Segoe UI,Roboto,Arial",margin:"16px"}}>
+        <h1>TOS Inventory</h1>
+        <Login onLogin={()=>window.location.reload()} />
+        <style>{baseCss}</style>
+      </div>
+    );
+  }
+
+  // ... tu resto de la App
+}
 import React, { useState, useEffect } from 'react'
 import InvoiceOCR from "./InvoiceOCR";
 
