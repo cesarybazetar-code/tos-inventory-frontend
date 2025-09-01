@@ -1,26 +1,8 @@
-import Login from "./Login";
-
-// ...
-
-export default function App(){
-  const token = localStorage.getItem("token");
-
-  if(!token){
-    return (
-      <div style={{fontFamily:"system-ui,-apple-system,Segoe UI,Roboto,Arial",margin:"16px"}}>
-        <h1>TOS Inventory</h1>
-        <Login onLogin={()=>window.location.reload()} />
-        <style>{baseCss}</style>
-      </div>
-    );
-  }
-
-  // ... tu resto de la App
-}
 import React, { useState, useEffect } from 'react'
 import InvoiceOCR from "./InvoiceOCR";
+import Login from "./Login"; // <- usamos tu Login.tsx
 
-/* ========= ENV + STORAGE ========= */
+// ====== ENV + STORAGE DEFAULTS ======
 const API_DEFAULT =
   (import.meta as any).env?.VITE_API_BASE_URL ||
   localStorage.getItem('VITE_API_BASE_URL') ||
@@ -34,7 +16,7 @@ const ADMIN_KEY_DEFAULT =
 type Item = { id:number; name:string; storage_area?:string; par?:number; inv_unit_price?:number; active?:boolean }
 type CountLine = { item_id:number; qty:number }
 
-/* ========= AUTH HELPERS ========= */
+// ====== AUTH HELPERS ======
 function authHeaders(){
   const t = localStorage.getItem('token');
   return t ? { Authorization: `Bearer ${t}` } : {};
@@ -80,65 +62,15 @@ async function apiPut(path:string, body:any){
   return r.json();
 }
 
-/* ========= ROLE PERMISSIONS (UI) ========= */
+// ====== ROLE PERMISSIONS (UI) ======
 const rolePermissions: Record<string, Array<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>> = {
   admin:   ['counts','items','auto','settings','ocr','users'],
   manager: ['counts','items','auto','ocr'],
   counter: ['counts'],
+  viewer:  ['counts'],
 };
 
-/* ========= LOGIN ========= */
-function LoginPanel(){
-  const [email, setEmail] = useState(localStorage.getItem('last_email') || '');
-  const [password, setPassword] = useState('');
-  const [loading,setLoading] = useState(false);
-  const [error,setError] = useState('');
-
-  const login = async ()=>{
-    setLoading(true); setError('');
-    try{
-      const base = getApiBase();
-      const form = new URLSearchParams();
-      form.set('username', email.trim().toLowerCase());
-      form.set('password', password);
-      const r = await fetch(base + '/auth/login', {
-        method:'POST',
-        headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
-        body: form.toString()
-      });
-      if(!r.ok){
-        throw new Error(await r.text() || 'Login failed');
-      }
-      const data = await r.json();
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('role', data.user.role);
-      localStorage.setItem('email', data.user.email);
-      localStorage.setItem('last_email', email.trim().toLowerCase());
-      window.location.reload();
-    }catch(e:any){
-      setError(e.message || 'Login failed');
-    }finally{
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="card" style={{maxWidth:480, margin:'40px auto'}}>
-      <h3>Log in</h3>
-      <div className="row">
-        <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
-        <input placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
-      </div>
-      {error && <div style={{color:'red'}}>{error}</div>}
-      <div className="row">
-        <button className="btn" onClick={login} disabled={loading}>{loading?'Signing in…':'Sign in'}</button>
-      </div>
-      <div className="muted">API: {getApiBase() || '(set in env)'}</div>
-    </div>
-  );
-}
-
-/* ========= SETTINGS (admin) ========= */
+// ====== SETTINGS (solo admin) ======
 function Settings(){
   const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
   const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
@@ -146,6 +78,7 @@ function Settings(){
     if(api) localStorage.setItem('VITE_API_BASE_URL', api); else localStorage.removeItem('VITE_API_BASE_URL');
     if(key) localStorage.setItem('admin_key', key); else localStorage.removeItem('admin_key');
     alert('Saved. Reload the page.');
+    window.location.reload();
   }
   return (<div className="card"><h3>Settings</h3>
     <div className="row">
@@ -153,11 +86,11 @@ function Settings(){
       <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
       <button className="btn screen-only" onClick={save}>Save</button>
     </div>
-    <div className="muted">Env values (Vercel) son la base; aquí puedes sobreescribir si necesitas probar algo.</div>
+    <div className="muted">Las variables de entorno son la base; aquí puedes sobreescribir si necesitas probar algo.</div>
   </div>)
 }
 
-/* ========= IMPORTER (admin/manager) ========= */
+// ====== IMPORTER (admin/manager) ======
 function Importer(){
   const [msg,setMsg]=useState('');
   const upload = async (file:File)=>{
@@ -177,7 +110,7 @@ function Importer(){
     <div className="muted">{msg}</div></div>)
 }
 
-/* ========= ITEMS (admin/manager) ========= */
+// ====== ITEMS (admin/manager) ======
 function Items(){
   const [items,setItems]=useState<Item[]>([]); 
   const [name,setName]=useState(''); 
@@ -203,7 +136,7 @@ function Items(){
   </div>)
 }
 
-/* ========= COUNTS (todos) ========= */
+// ====== COUNTS (counter/manager/admin/viewer para ver; editar: counter/manager/admin) ======
 function Counts(){
   const [items,setItems]=useState<Item[]>([]); 
   const [area,setArea]=useState('Cooking Line'); 
@@ -219,14 +152,9 @@ function Counts(){
     await apiPost('/counts', payload); setLines({}); load();
   }
 
-  const quickAdd = async()=>{
-    if(!newName.trim()) return;
-    await apiPost('/items', { name: newName.trim(), storage_area: area, par: newPar || 0 });
-    setNewName(''); setNewPar(0); load();
-  }
-
-  const role = localStorage.getItem('role') || 'counter';
+  const role = localStorage.getItem('role') || 'viewer';
   const canQuickAdd = role === 'admin' || role === 'manager';
+  const canSave = role === 'admin' || role === 'manager' || role === 'counter';
 
   return (<div className="card">
     <div className="header screen-only" style={{display:'flex',gap:12,alignItems:'center',justifyContent:'space-between'}}>
@@ -235,7 +163,7 @@ function Counts(){
         <select value={area} onChange={e=>setArea(e.target.value)}>
           {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
         </select>
-        <button className="btn" onClick={save}>Save Count</button>
+        {canSave && <button className="btn" onClick={save}>Save Count</button>}
       </div>
       <button className="btn" onClick={()=>window.print()}>🖨️ Print</button>
     </div>
@@ -244,7 +172,17 @@ function Counts(){
       <div className="row screen-only">
         <input placeholder="Add new item here" value={newName} onChange={e=>setNewName(e.target.value)} />
         <input placeholder="PAR (optional)" type="number" value={newPar} onChange={e=>setNewPar(parseFloat(e.target.value||'0'))} />
-        <div></div><button className="btn" onClick={quickAdd}>Add Item Here</button>
+        <div></div>
+        <button
+          className="btn"
+          onClick={async ()=>{
+            if(!newName.trim()) return;
+            await apiPost('/items', { name: newName.trim(), storage_area: area, par: newPar || 0 });
+            setNewName(''); setNewPar(0); load();
+          }}
+        >
+          Add Item Here
+        </button>
       </div>
     )}
 
@@ -266,6 +204,7 @@ function Counts(){
                 type="number"
                 value={lines[i.id] || ''}
                 onChange={e=>setLines(prev=>({...prev,[i.id]:parseFloat(e.target.value||'0')}))}
+                disabled={!canSave}
               />
             </td>
             <td className="paper-only">&nbsp;</td>
@@ -278,7 +217,7 @@ function Counts(){
   </div>)
 }
 
-/* ========= AUTO PO (admin/manager) ========= */
+// ====== AUTO PO (admin/manager) ======
 function AutoPO(){
   const [area,setArea]=useState('Cooking Line'); const [rows,setRows]=useState<any[]>([]);
   const run = async()=>{ const data = await apiGet(`/auto-po?storage_area=${encodeURIComponent(area)}`); setRows(data.lines||[]); }
@@ -292,7 +231,7 @@ function AutoPO(){
     </table></div>)
 }
 
-/* ========= USERS (admin) ========= */
+// ====== USERS (solo admin) ======
 type UserRow = { id:number; email:string; name?:string; role:'admin'|'manager'|'counter'|'viewer'; active:boolean }
 
 function UsersAdmin(){
@@ -305,7 +244,8 @@ function UsersAdmin(){
 
   const load = async()=>{
     try{
-      const res = await apiGet('/admin/users'); // <-- main.py: admin router
+      // 🔁 NUEVAS RUTAS DE ADMIN:
+      const res = await apiGet('/admin/users');
       setUsers(res);
     }catch(e:any){ setError(e.message||'Error loading users'); }
   };
@@ -321,15 +261,16 @@ function UsersAdmin(){
     }catch(e:any){ setError(e.message||'Error creating user'); }
   };
 
-  const updateUser = async (u:UserRow, patch:Partial<UserRow> & {new_password?:string})=>{
+  const updateUser = async (u:UserRow, patch:Partial<UserRow> & {password?:string})=>{
     setError('');
     try{
       const body:any = {};
       if(patch.name !== undefined) body.name = patch.name;
       if(patch.role !== undefined) body.role = patch.role;
       if(patch.active !== undefined) body.active = patch.active;
-      if(patch.new_password) body.new_password = patch.new_password; // <-- main.py expects new_password
-      await apiPut(`/admin/users/${u.id}`, body); // <-- path actualizado
+      if((patch as any).password) body.new_password = (patch as any).password;
+      // 🔁 NUEVA RUTA PUT:
+      await apiPut(`/admin/users/${u.id}`, body);
       await load();
     }catch(e:any){ setError(e.message||'Error updating user'); }
   };
@@ -383,7 +324,7 @@ function UsersAdmin(){
               <td>
                 <button className="btn" onClick={()=>{
                   const pw = prompt('New password for '+u.email);
-                  if(pw){ updateUser(u,{new_password:pw}); }
+                  if(pw){ updateUser(u,{password:pw}); }
                 }}>Set</button>
               </td>
             </tr>
@@ -394,13 +335,14 @@ function UsersAdmin(){
   )
 }
 
-/* ========= TOP BAR ========= */
+// ====== TOP BAR ======
 function TopBar({tab,setTab,allowedTabs}:{tab:string,setTab:(t:any)=>void,allowedTabs:Array<string>}){
   const email = localStorage.getItem('email') || '';
-  const role  = localStorage.getItem('role') || 'counter';
+  const role  = localStorage.getItem('role') || 'viewer';
   const logout = ()=>{
     localStorage.removeItem('token');
     localStorage.removeItem('role');
+    localStorage.removeItem('email');
     window.location.reload();
   };
 
@@ -428,10 +370,10 @@ function TopBar({tab,setTab,allowedTabs}:{tab:string,setTab:(t:any)=>void,allowe
   );
 }
 
-/* ========= APP ROOT ========= */
+// ====== APP ROOT ======
 export default function App(){
   const token = localStorage.getItem('token');
-  const role  = localStorage.getItem('role') || 'counter';
+  const role  = localStorage.getItem('role') || 'viewer';
   const allowedTabs = rolePermissions[role] || ['counts'];
 
   const [tab,setTab]=useState<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>(
@@ -446,7 +388,7 @@ export default function App(){
     return (
       <div style={{fontFamily:'system-ui,-apple-system,Segoe UI,Roboto,Arial',margin:'16px'}}>
         <h1>TOS Inventory</h1>
-        <LoginPanel/>
+        <Login /> {/* Usa tu Login.tsx */}
         <style>{baseCss}</style>
       </div>
     );
@@ -468,7 +410,7 @@ export default function App(){
   )
 }
 
-/* ========= CSS ========= */
+// ====== CSS ======
 const baseCss = `
   .btn{padding:8px 12px;border:1px solid #000;background:#000;color:#fff;border-radius:10px;cursor:pointer}
   .tab{padding:8px 12px;border:1px solid #000;border-radius:10px;background:#fff}
