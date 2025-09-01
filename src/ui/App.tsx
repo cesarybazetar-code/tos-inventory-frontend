@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import InvoiceOCR from "./InvoiceOCR";
 
-// ====== ENV + STORAGE DEFAULTS ======
+/* ========= ENV + STORAGE ========= */
 const API_DEFAULT =
   (import.meta as any).env?.VITE_API_BASE_URL ||
   localStorage.getItem('VITE_API_BASE_URL') ||
@@ -15,7 +15,7 @@ const ADMIN_KEY_DEFAULT =
 type Item = { id:number; name:string; storage_area?:string; par?:number; inv_unit_price?:number; active?:boolean }
 type CountLine = { item_id:number; qty:number }
 
-// ====== AUTH HELPERS ======
+/* ========= AUTH HELPERS ========= */
 function authHeaders(){
   const t = localStorage.getItem('token');
   return t ? { Authorization: `Bearer ${t}` } : {};
@@ -61,14 +61,14 @@ async function apiPut(path:string, body:any){
   return r.json();
 }
 
-// ====== ROLE PERMISSIONS (UI) ======
+/* ========= ROLE PERMISSIONS (UI) ========= */
 const rolePermissions: Record<string, Array<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>> = {
   admin:   ['counts','items','auto','settings','ocr','users'],
   manager: ['counts','items','auto','ocr'],
   counter: ['counts'],
 };
 
-// ====== LOGIN PANEL ======
+/* ========= LOGIN ========= */
 function LoginPanel(){
   const [email, setEmail] = useState(localStorage.getItem('last_email') || '');
   const [password, setPassword] = useState('');
@@ -119,7 +119,7 @@ function LoginPanel(){
   );
 }
 
-// ====== SETTINGS (solo admin) ======
+/* ========= SETTINGS (admin) ========= */
 function Settings(){
   const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
   const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
@@ -138,7 +138,7 @@ function Settings(){
   </div>)
 }
 
-// ====== IMPORTER (admin/manager) ======
+/* ========= IMPORTER (admin/manager) ========= */
 function Importer(){
   const [msg,setMsg]=useState('');
   const upload = async (file:File)=>{
@@ -158,7 +158,7 @@ function Importer(){
     <div className="muted">{msg}</div></div>)
 }
 
-// ====== ITEMS (admin/manager) ======
+/* ========= ITEMS (admin/manager) ========= */
 function Items(){
   const [items,setItems]=useState<Item[]>([]); 
   const [name,setName]=useState(''); 
@@ -184,7 +184,7 @@ function Items(){
   </div>)
 }
 
-// ====== COUNTS (todos los roles) ======
+/* ========= COUNTS (todos) ========= */
 function Counts(){
   const [items,setItems]=useState<Item[]>([]); 
   const [area,setArea]=useState('Cooking Line'); 
@@ -259,7 +259,7 @@ function Counts(){
   </div>)
 }
 
-// ====== AUTO PO (admin/manager) ======
+/* ========= AUTO PO (admin/manager) ========= */
 function AutoPO(){
   const [area,setArea]=useState('Cooking Line'); const [rows,setRows]=useState<any[]>([]);
   const run = async()=>{ const data = await apiGet(`/auto-po?storage_area=${encodeURIComponent(area)}`); setRows(data.lines||[]); }
@@ -273,20 +273,20 @@ function AutoPO(){
     </table></div>)
 }
 
-// ====== USERS (solo admin) ======
-type UserRow = { id:number; email:string; name?:string; role:'admin'|'manager'|'counter'; active:boolean }
+/* ========= USERS (admin) ========= */
+type UserRow = { id:number; email:string; name?:string; role:'admin'|'manager'|'counter'|'viewer'; active:boolean }
 
 function UsersAdmin(){
   const [users,setUsers]=useState<UserRow[]>([]);
   const [email,setEmail]=useState('');
   const [name,setName]=useState('');
   const [password,setPassword]=useState('');
-  const [role,setRole]=useState<'admin'|'manager'|'counter'>('counter');
+  const [role,setRole]=useState<'admin'|'manager'|'counter'|'viewer'>('counter');
   const [error,setError]=useState('');
 
   const load = async()=>{
     try{
-      const res = await apiGet('/auth/users');
+      const res = await apiGet('/admin/users'); // <-- main.py: admin router
       setUsers(res);
     }catch(e:any){ setError(e.message||'Error loading users'); }
   };
@@ -302,15 +302,15 @@ function UsersAdmin(){
     }catch(e:any){ setError(e.message||'Error creating user'); }
   };
 
-  const updateUser = async (u:UserRow, patch:Partial<UserRow> & {password?:string})=>{
+  const updateUser = async (u:UserRow, patch:Partial<UserRow> & {new_password?:string})=>{
     setError('');
     try{
       const body:any = {};
       if(patch.name !== undefined) body.name = patch.name;
       if(patch.role !== undefined) body.role = patch.role;
       if(patch.active !== undefined) body.active = patch.active;
-      if((patch as any).password) body.password = (patch as any).password;
-      await apiPut(`/auth/users/${u.id}`, body);
+      if(patch.new_password) body.new_password = patch.new_password; // <-- main.py expects new_password
+      await apiPut(`/admin/users/${u.id}`, body); // <-- path actualizado
       await load();
     }catch(e:any){ setError(e.message||'Error updating user'); }
   };
@@ -330,6 +330,7 @@ function UsersAdmin(){
           <option value="counter">counter</option>
           <option value="manager">manager</option>
           <option value="admin">admin</option>
+          <option value="viewer">viewer</option>
         </select>
       </div>
       <div className="row">
@@ -354,6 +355,7 @@ function UsersAdmin(){
                   <option value="counter">counter</option>
                   <option value="manager">manager</option>
                   <option value="admin">admin</option>
+                  <option value="viewer">viewer</option>
                 </select>
               </td>
               <td>
@@ -362,7 +364,7 @@ function UsersAdmin(){
               <td>
                 <button className="btn" onClick={()=>{
                   const pw = prompt('New password for '+u.email);
-                  if(pw){ updateUser(u,{password:pw}); }
+                  if(pw){ updateUser(u,{new_password:pw}); }
                 }}>Set</button>
               </td>
             </tr>
@@ -373,7 +375,7 @@ function UsersAdmin(){
   )
 }
 
-// ====== TOP BAR ======
+/* ========= TOP BAR ========= */
 function TopBar({tab,setTab,allowedTabs}:{tab:string,setTab:(t:any)=>void,allowedTabs:Array<string>}){
   const email = localStorage.getItem('email') || '';
   const role  = localStorage.getItem('role') || 'counter';
@@ -407,7 +409,7 @@ function TopBar({tab,setTab,allowedTabs}:{tab:string,setTab:(t:any)=>void,allowe
   );
 }
 
-// ====== APP ROOT ======
+/* ========= APP ROOT ========= */
 export default function App(){
   const token = localStorage.getItem('token');
   const role  = localStorage.getItem('role') || 'counter';
@@ -447,7 +449,7 @@ export default function App(){
   )
 }
 
-// ====== CSS ======
+/* ========= CSS ========= */
 const baseCss = `
   .btn{padding:8px 12px;border:1px solid #000;background:#000;color:#fff;border-radius:10px;cursor:pointer}
   .tab{padding:8px 12px;border:1px solid #000;border-radius:10px;background:#fff}
