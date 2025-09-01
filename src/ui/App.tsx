@@ -4,7 +4,8 @@ import Login from "./Login"; // tu Login.tsx (usa onLogin)
 
 // ====== ENV + STORAGE DEFAULTS ======
 const API_DEFAULT =
-  (import.meta as any).env?.VITE_API_URL || (import.meta as any).env?.VITE_API_BASE_URL ||
+  (import.meta as any).env?.VITE_API_URL ||
+  (import.meta as any).env?.VITE_API_BASE_URL ||
   localStorage.getItem('VITE_API_BASE_URL') ||
   '';
 
@@ -13,13 +14,10 @@ const ADMIN_KEY_DEFAULT =
   localStorage.getItem('admin_key') ||
   '';
 
-type Item = { id:number; name:string; storage_area?:string; par?:number; inv_unit_price?:number; active?:boolean }
-
-  const [backendUp, setBackendUp] = useState<boolean>(true);
-  useEffect(()=>{ 
-    import('../lib/ping').then(mod => mod.ping().then(ok => setBackendUp(ok)));
-  }, []);
-
+type Item = {
+  id:number; name:string; storage_area?:string; par?:number;
+  inv_unit_price?:number; active?:boolean
+}
 
 // ====== AUTH HELPERS ======
 function authHeaders(){
@@ -32,36 +30,36 @@ function getApiBase() {
 function getAdminKey() {
   return localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT;
 }
-async function apiGet(path:string){ 
+async function apiGet(path:string){
   const base = getApiBase();
-  const r = await fetch(base + path, { headers: { ...authHeaders() } }); 
+  const r = await fetch(base + path, { headers: { ...authHeaders() } });
   if(!r.ok){ throw new Error(await r.text()); }
-  return r.json(); 
+  return r.json();
 }
 async function apiPost(path:string, body:any){
   const base = getApiBase();
-  const r = await fetch(base + path, { 
-    method:'POST', 
-    headers:{ 
-      'Content-Type':'application/json', 
+  const r = await fetch(base + path, {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json',
       'x-admin-key': getAdminKey(),
       ...authHeaders()
-    }, 
-    body: JSON.stringify(body) 
+    },
+    body: JSON.stringify(body)
   });
   if(!r.ok){ throw new Error(await r.text()); }
   return r.json();
 }
 async function apiPut(path:string, body:any){
   const base = getApiBase();
-  const r = await fetch(base + path, { 
-    method:'PUT', 
-    headers:{ 
-      'Content-Type':'application/json', 
+  const r = await fetch(base + path, {
+    method:'PUT',
+    headers:{
+      'Content-Type':'application/json',
       'x-admin-key': getAdminKey(),
       ...authHeaders()
-    }, 
-    body: JSON.stringify(body) 
+    },
+    body: JSON.stringify(body)
   });
   if(!r.ok){ throw new Error(await r.text()); }
   return r.json();
@@ -84,15 +82,18 @@ function Settings(){
     if(key) localStorage.setItem('admin_key', key); else localStorage.removeItem('admin_key');
     alert('Saved. Reload the page.');
     window.location.reload();
-  }
-  return (<div className="card"><h3>Settings</h3>
-    <div className="row">
-      <input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
-      <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
-      <button className="btn screen-only" onClick={save}>Save</button>
+  };
+  return (
+    <div className="card">
+      <h3>Settings</h3>
+      <div className="row">
+        <input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
+        <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
+        <button className="btn screen-only" onClick={save}>Save</button>
+      </div>
+      <div className="muted">Puedes fijar el API aquí si no viene por variable de entorno.</div>
     </div>
-    <div className="muted">Puedes fijar el API aquí si no viene por variable de entorno.</div>
-  </div>)
+  );
 }
 
 // ====== IMPORTER (admin/manager) ======
@@ -101,139 +102,166 @@ function Importer(){
   const upload = async (file:File)=>{
     const base = getApiBase();
     const fd = new FormData(); fd.append('file', file);
-    const r = await fetch(base + '/import/catalog', { 
-      method:'POST', 
-      headers:{ 'x-admin-key': getAdminKey(), ...authHeaders() }, 
-      body: fd 
+    const r = await fetch(base + '/import/catalog', {
+      method:'POST',
+      headers:{ 'x-admin-key': getAdminKey(), ...authHeaders() },
+      body: fd
     });
     const data = await r.json();
     if(!r.ok){ alert(JSON.stringify(data)); return; }
     setMsg(`Imported ${data.created ?? 0} new, ${data.updated ?? 0} updated`);
-  }
-  return (<div className="card screen-only"><h3>Import Catalog CSV</h3>
-    <input type="file" accept=".csv" onChange={e=> e.target.files && upload(e.target.files[0]) } />
-    <div className="muted">{msg}</div></div>)
+  };
+  return (
+    <div className="card screen-only">
+      <h3>Import Catalog CSV</h3>
+      <input type="file" accept=".csv" onChange={e=> e.target.files && upload(e.target.files[0]) } />
+      <div className="muted">{msg}</div>
+    </div>
+  );
 }
 
 // ====== ITEMS (admin/manager) ======
 function Items(){
-  const [items,setItems]=useState<Item[]>([]); 
-  const [name,setName]=useState(''); 
-  const [area,setArea]=useState('Cooking Line'); 
+  const [items,setItems]=useState<Item[]>([]);
+  const [name,setName]=useState('');
+  const [area,setArea]=useState('Cooking Line');
   const [par,setPar]=useState(0);
-  const load = async()=> setItems(await apiGet('/items')); 
+  const load = async()=> setItems(await apiGet('/items'));
   useEffect(()=>{load();},[]);
-  const add = async()=>{ 
-    if(!name.trim()) return; 
-    await apiPost('/items', { name, storage_area:area, par }); 
-    setName(''); setPar(0); load(); 
-  }
-  return (<div className="card"><h3>Items (Add / Add Location)</h3>
-    <div className="row screen-only">
-      <input placeholder="Item name" value={name} onChange={e=>setName(e.target.value)} />
-      <input placeholder="PAR" type="number" value={par} onChange={e=>setPar(parseFloat(e.target.value||'0'))} />
-      <select value={area} onChange={e=>setArea(e.target.value)}>
-        {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
-      </select>
-      <button className="btn" onClick={add}>Add / Add Location</button>
+  const add = async()=>{
+    if(!name.trim()) return;
+    await apiPost('/items', { name, storage_area:area, par });
+    setName(''); setPar(0); load();
+  };
+  return (
+    <div className="card">
+      <h3>Items (Add / Add Location)</h3>
+      <div className="row screen-only">
+        <input placeholder="Item name" value={name} onChange={e=>setName(e.target.value)} />
+        <input placeholder="PAR" type="number" value={par} onChange={e=>setPar(parseFloat(e.target.value||'0'))} />
+        <select value={area} onChange={e=>setArea(e.target.value)}>
+          {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
+        </select>
+        <button className="btn" onClick={add}>Add / Add Location</button>
+      </div>
+      {items.map(i=>(
+        <div key={i.id} className="card small">
+          <b>{i.name}</b> — <span className="muted">{i.storage_area||'-'}</span> | PAR: {i.par||0}
+        </div>
+      ))}
     </div>
-    {items.map(i=>(<div key={i.id} className="card small"><b>{i.name}</b> — <span className="muted">{i.storage_area||'-'}</span> | PAR: {i.par||0}</div>))}
-  </div>)
+  );
 }
 
 // ====== COUNTS ======
 function Counts(){
-  const [items,setItems]=useState<Item[]>([]); 
-  const [area,setArea]=useState('Cooking Line'); 
-  const [lines,setLines]=useState<Record<number,number>>({}); 
-  const [newName,setNewName]=useState(''); 
+  const [items,setItems]=useState<Item[]>([]);
+  const [area,setArea]=useState('Cooking Line');
+  const [lines,setLines]=useState<Record<number,number>>({});
+  const [newName,setNewName]=useState('');
   const [newPar,setNewPar]=useState(0);
 
-  const load = async()=>{ setItems(await apiGet('/items?area='+encodeURIComponent(area))); }; 
+  const load = async()=>{ setItems(await apiGet('/items?area='+encodeURIComponent(area))); };
   useEffect(()=>{load();},[area]);
 
   const save = async()=>{
-    const payload = { storage_area: area, lines: Object.entries(lines).filter(([_,q])=>(parseFloat(q as any)||0)>0).map(([id,qty])=>({item_id:parseInt(id), qty:Number(qty)})) };
+    const payload = {
+      storage_area: area,
+      lines: Object.entries(lines)
+        .filter(([_,q])=>(parseFloat(q as any)||0)>0)
+        .map(([id,qty])=>({item_id:parseInt(id), qty:Number(qty)}))
+    };
     await apiPost('/counts', payload); setLines({}); load();
-  }
+  };
 
   const role = localStorage.getItem('role') || 'viewer';
   const canQuickAdd = role === 'admin' || role === 'manager';
   const canSave = role === 'admin' || role === 'manager' || role === 'counter';
 
-  return (<div className="card">
-    <div className="header screen-only" style={{display:'flex',gap:12,alignItems:'center',justifyContent:'space-between'}}>
-      <div style={{display:'flex',gap:12,alignItems:'center'}}>
-        <h3 style={{margin:0}}>Counts — {area}</h3>
-        <select value={area} onChange={e=>setArea(e.target.value)}>
-          {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
-        </select>
-        {canSave && <button className="btn" onClick={save}>Save Count</button>}
+  return (
+    <div className="card">
+      <div className="header screen-only" style={{display:'flex',gap:12,alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{display:'flex',gap:12,alignItems:'center'}}>
+          <h3 style={{margin:0}}>Counts — {area}</h3>
+          <select value={area} onChange={e=>setArea(e.target.value)}>
+            {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
+          </select>
+          {canSave && <button className="btn" onClick={save}>Save Count</button>}
+        </div>
+        <button className="btn" onClick={()=>window.print()}>🖨️ Print</button>
       </div>
-      <button className="btn" onClick={()=>window.print()}>🖨️ Print</button>
-    </div>
 
-    {canQuickAdd && (
-      <div className="row screen-only">
-        <input placeholder="Add new item here" value={newName} onChange={e=>setNewName(e.target.value)} />
-        <input placeholder="PAR (optional)" type="number" value={newPar} onChange={e=>setNewPar(parseFloat(e.target.value||'0'))} />
-        <div></div>
-        <button
-          className="btn"
-          onClick={async ()=>{
-            if(!newName.trim()) return;
-            await apiPost('/items', { name: newName.trim(), storage_area: area, par: newPar || 0 });
-            setNewName(''); setNewPar(0); load();
-          }}
-        >
-          Add Item Here
-        </button>
-      </div>
-    )}
+      {canQuickAdd && (
+        <div className="row screen-only">
+          <input placeholder="Add new item here" value={newName} onChange={e=>setNewName(e.target.value)} />
+          <input placeholder="PAR (optional)" type="number" value={newPar} onChange={e=>setNewPar(parseFloat(e.target.value||'0'))} />
+          <div></div>
+          <button
+            className="btn"
+            onClick={async ()=>{
+              if(!newName.trim()) return;
+              await apiPost('/items', { name: newName.trim(), storage_area: area, par: newPar || 0 });
+              setNewName(''); setNewPar(0); load();
+            }}
+          >
+            Add Item Here
+          </button>
+        </div>
+      )}
 
-    <table className="print-table">
-      <thead>
-        <tr>
-          <th style={{width:'55%'}}>Item</th>
-          <th style={{width:'15%'}}>PAR</th>
-          <th style={{width:'30%'}}>Count</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map(i=>(
-          <tr key={i.id}>
-            <td>{i.name}</td>
-            <td>{i.par ?? 0}</td>
-            <td className="screen-only">
-              <input
-                type="number"
-                value={lines[i.id] || ''}
-                onChange={e=>setLines(prev=>({...prev,[i.id]:parseFloat(e.target.value||'0')}))}
-                disabled={!canSave}
-              />
-            </td>
-            <td className="paper-only">&nbsp;</td>
+      <table className="print-table">
+        <thead>
+          <tr>
+            <th style={{width:'55%'}}>Item</th>
+            <th style={{width:'15%'}}>PAR</th>
+            <th style={{width:'30%'}}>Count</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {items.map(i=>(
+            <tr key={i.id}>
+              <td>{i.name}</td>
+              <td>{i.par ?? 0}</td>
+              <td className="screen-only">
+                <input
+                  type="number"
+                  value={lines[i.id] || ''}
+                  onChange={e=>setLines(prev=>({...prev,[i.id]:parseFloat(e.target.value||'0')}))}
+                  disabled={!canSave}
+                />
+              </td>
+              <td className="paper-only">&nbsp;</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-    <div className="muted">{items.length} item(s) in this area</div>
-  </div>)
+      <div className="muted">{items.length} item(s) in this area</div>
+    </div>
+  );
 }
 
 // ====== AUTO PO (admin/manager) ======
 function AutoPO(){
-  const [area,setArea]=useState('Cooking Line'); const [rows,setRows]=useState<any[]>([]);
-  const run = async()=>{ const data = await apiGet(`/auto-po?storage_area=${encodeURIComponent(area)}`); setRows(data.lines||[]); }
+  const [area,setArea]=useState('Cooking Line');
+  const [rows,setRows]=useState<any[]>([]);
+  const run = async()=>{ const data = await apiGet(`/auto-po?storage_area=${encodeURIComponent(area)}`); setRows(data.lines||[]); };
   useEffect(()=>{run();},[area]);
-  return (<div className="card"><h3>Auto-PO</h3>
-    <div className="row screen-only"><select value={area} onChange={e=>setArea(e.target.value)}>
-      {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
-    </select><button className="btn" onClick={run}>Refresh</button></div>
-    <table><thead><tr><th>Item</th><th>Area</th><th>On Hand</th><th>PAR</th><th>Suggested</th></tr></thead>
-      <tbody>{rows.map((r,i)=>(<tr key={i}><td>{r.name}</td><td>{r.storage_area||'-'}</td><td>{r.on_hand}</td><td>{r.par}</td><td>{r.suggested_order_qty}</td></tr>))}</tbody>
-    </table></div>)
+  return (
+    <div className="card">
+      <h3>Auto-PO</h3>
+      <div className="row screen-only">
+        <select value={area} onChange={e=>setArea(e.target.value)}>
+          {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
+        </select>
+        <button className="btn" onClick={run}>Refresh</button>
+      </div>
+      <table>
+        <thead><tr><th>Item</th><th>Area</th><th>On Hand</th><th>PAR</th><th>Suggested</th></tr></thead>
+        <tbody>{rows.map((r,i)=>(<tr key={i}><td>{r.name}</td><td>{r.storage_area||'-'}</td><td>{r.on_hand}</td><td>{r.par}</td><td>{r.suggested_order_qty}</td></tr>))}</tbody>
+      </table>
+    </div>
+  );
 }
 
 // ====== USERS (solo admin) ======
@@ -249,7 +277,7 @@ function UsersAdmin(){
 
   const load = async()=>{
     try{
-      const res = await apiGet('/admin/users'); // <- nuevas rutas admin
+      const res = await apiGet('/admin/users'); // nuevas rutas admin
       setUsers(res);
     }catch(e:any){ setError(e.message||'Error loading users'); }
   };
@@ -273,7 +301,7 @@ function UsersAdmin(){
       if(patch.role !== undefined) body.role = patch.role;
       if(patch.active !== undefined) body.active = patch.active;
       if((patch as any).password) body.new_password = (patch as any).password;
-      await apiPut(`/admin/users/${u.id}`, body); // <- PUT admin
+      await apiPut(`/admin/users/${u.id}`, body);
       await load();
     }catch(e:any){ setError(e.message||'Error updating user'); }
   };
@@ -335,8 +363,13 @@ function UsersAdmin(){
         </tbody>
       </table>
     </div>
-  )
+  );
 }
+
+// Simple aliases so JSX below matches your existing names
+const Auto  = AutoPO;
+const OCR   = InvoiceOCR;
+const Users = UsersAdmin;
 
 // ====== TOP BAR ======
 function TopBar({tab,setTab,allowedTabs}:{tab:string,setTab:(t:any)=>void,allowedTabs:Array<string>}){
@@ -379,14 +412,7 @@ export default function App(){
   const role  = localStorage.getItem('role') || 'viewer';
   const allowedTabs = rolePermissions[role] || ['counts'];
 
-  const [tab,setTab]=useState<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>(
-
-  // backend connectivity banner (hooks must be INSIDE the component)
-  const [backendUp, setBackendUp] = useState(true);
-  useEffect(() => {
-    import('../lib/ping').then(mod => mod.ping().then(ok => setBackendUp(ok)));
-  }, []);
-
+  const [tab,setTab] = useState<'counts'|'items'|'auto'|'settings'|'ocr'|'users'>(
     (allowedTabs.includes('counts') ? 'counts' :
      allowedTabs.includes('items') ? 'items' :
      allowedTabs.includes('auto') ? 'auto' :
@@ -394,7 +420,30 @@ export default function App(){
      allowedTabs.includes('users') ? 'users' : 'settings') as any
   );
 
+  // ✅ backend connectivity banner (hooks must be INSIDE the component)
+  const [backendUp, setBackendUp] = useState(true);
+  useEffect(() => {
+    import('../lib/ping').then(mod => mod.ping().then(ok => setBackendUp(ok)));
+  }, []);
+
   if (!token) {
+    return (
+      <div style={{fontFamily:'system-ui, -apple-system, Segoe UI, Roboto, Arial'}}>
+        {!backendUp && (
+          <div style={{background:'#fff3cd',border:'1px solid #ffeeba',padding:8,margin:'8px 0'}}>
+            Backend unreachable — check VITE_API_URL and CORS.
+          </div>
+        )}
+
+        <h1>TOS Inventory</h1>
+        <Login onLogin={() => window.location.reload()} />
+        <div className="muted" style={{marginTop:8}}>
+          <style>{baseCss}</style>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{fontFamily:'system-ui, -apple-system, Segoe UI, Roboto, Arial'}}>
       {!backendUp && (
@@ -404,38 +453,22 @@ export default function App(){
       )}
 
       <h1>TOS Inventory</h1>
-      <Login onLogin={() => window.location.reload()} />
-      <div className="muted" style={{marginTop:8}}>
-        <style>{baseCss}</style>
-      </div>
+      <TopBar tab={tab} setTab={setTab} allowedTabs={allowedTabs} />
+
+      {(role==='admin' || role==='manager') && (
+        <>
+          {tab==='counts'   && <Counts />}
+          {tab==='items'    && <Items />}
+          {tab==='auto'     && <Auto />}
+          {tab==='ocr'      && <OCR />}
+          {tab==='users'    && <Users />}
+          {tab==='settings' && <Settings />}
+        </>
+      )}
+
+      <style>{baseCss}</style>
     </div>
   );
-}
-
-  
-return (
-  <div style={{fontFamily:'system-ui, -apple-system, Segoe UI, Roboto, Arial'}}>
-    {!backendUp && (
-      <div style={{background:'#fff3cd',border:'1px solid #ffeeba',padding:8,margin:'8px 0'}}>
-        Backend unreachable — check VITE_API_URL and CORS.
-      </div>
-    )}
-
-    <h1>TOS Inventory</h1>
-    <TopBar tab={tab} setTab={setTab} />
-    {(role==='admin' || role==='manager') && (
-      <>
-        {tab==='counts' && <Counts />}
-        {tab==='items' && <Items />}
-        {tab==='auto' && <Auto />}
-        {tab==='ocr' && <OCR />}
-        {tab==='users' && <Users />}
-        {tab==='settings' && <Settings />}
-      </>
-    )}
-    <style>{baseCss}</style>
-  </div>
-)
 }
 
 // ====== CSS ======
