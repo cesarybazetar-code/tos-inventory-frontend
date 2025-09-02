@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import InvoiceOCR from "./InvoiceOCR";
 import Login from "./Login"; // tu Login.tsx (usa onLogin)
+import SettingsPanel from "./SettingsPanel";
 
 // ====== ENV + STORAGE DEFAULTS ======
 const API_DEFAULT =
@@ -352,12 +353,14 @@ const Users = UsersAdmin;
 function Settings(){
   const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
   const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
+
   const save = ()=>{
     if(api) localStorage.setItem('VITE_API_BASE_URL', api); else localStorage.removeItem('VITE_API_BASE_URL');
     if(key) localStorage.setItem('admin_key', key); else localStorage.removeItem('admin_key');
     alert('Saved. Reload the page.');
     window.location.reload();
   };
+
   return (
     <div className="card">
       <h3>Settings</h3>
@@ -367,8 +370,9 @@ function Settings(){
         <button className="btn screen-only" onClick={save}>Save</button>
       </div>
       <div className="muted">Puedes fijar el API aquí si no viene por variable de entorno.</div>
-      {/* Importer lives here so admin can upload catalog CSV */}
-      <Importer />
+
+      {/* Modular settings panel with Importer + Reset options */}
+      <SettingsPanel />
     </div>
   );
 }
