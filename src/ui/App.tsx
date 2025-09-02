@@ -504,7 +504,74 @@ function UsersAdmin() {
     </div>
   );
 }
+// ====== CATALOG (admin only) ======
+function CatalogEditor() {
+  const [items, setItems] = useState<Item[]>([]);
 
+  const load = async () => setItems(await apiGet('/items'));
+  useEffect(() => { load(); }, []);
+
+  const updateItem = async (id: number, patch: Partial<Item>) => {
+    await apiPut(`/items/${id}`, patch);
+    load();
+  };
+
+  return (
+    <div className="card">
+      <h3>Catalog (Admin Only)</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Area</th>
+            <th>PAR</th>
+            <th>Price</th>
+            <th>Active</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map(i => (
+            <tr key={i.id}>
+              <td>
+                <input
+                  value={i.name}
+                  onChange={e => updateItem(i.id, { name: e.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  value={i.storage_area || ''}
+                  onChange={e => updateItem(i.id, { storage_area: e.target.value })}
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  value={i.par || 0}
+                  onChange={e => updateItem(i.id, { par: parseFloat(e.target.value) })}
+                />
+              </td>
+              <td>
+                <input
+                  type="number"
+                  value={i.inv_unit_price || 0}
+                  onChange={e => updateItem(i.id, { inv_unit_price: parseFloat(e.target.value) })}
+                />
+              </td>
+              <td>
+                <input
+                  type="checkbox"
+                  checked={i.active ?? true}
+                  onChange={e => updateItem(i.id, { active: e.target.checked })}
+                />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 // ====== TOP BAR ======
 function TopBar({
   tab,
