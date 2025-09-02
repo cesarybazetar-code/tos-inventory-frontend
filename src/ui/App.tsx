@@ -73,9 +73,9 @@ async function apiPut(path: string, body: any) {
 // ====== ROLE PERMISSIONS (UI) ======
 const rolePermissions: Record<
   string,
-  Array<'counts' | 'items' | 'auto' | 'settings' | 'ocr' | 'users'>
+  Array<'counts' | 'catalog' | 'items' | 'auto' | 'settings' | 'ocr' | 'users'>
 > = {
-  admin: ['counts', 'items', 'auto', 'settings', 'ocr', 'users'],
+  admin: ['counts', 'catalog', 'items', 'auto', 'settings', 'ocr', 'users'],
   manager: ['counts', 'items', 'auto', 'ocr'],
   counter: ['counts'],
   viewer: ['counts'],
