@@ -468,7 +468,7 @@ export default function App(){
           {tab==='auto'     && <AutoPO />}
           {tab==='ocr'      && <InvoiceOCR />}
           {tab==='users'    && <UsersAdmin />}
-          {tab==='settings' && <Settings />}
+          {tab==='settings' && <SettingsPanel />}
         </>
       )}
 
