@@ -533,16 +533,16 @@ export default function App() {
       <TopBar tab={tab} setTab={setTab} allowedTabs={allowedTabs} />
 
       {(role === 'admin' || role === 'manager') && (
-        <>
-          {tab==='counts'   && <Counts />}
-          {tab==='catalog'  && role==='admin' && <CatalogEditor />}
-          {tab==='items'    && <Items />}
-          {tab==='auto'     && <AutoPO />}
-          {tab==='ocr'      && <InvoiceOCR />}
-          {tab==='users'    && <UsersAdmin />}
-          {tab==='settings' && <SettingsPanel />}
-        </>
-      )}
+  <>
+    {tab==='counts'   && <Counts />}
+    {tab==='catalog'  && role==='admin' && <CatalogEditor />}
+    {tab==='items'    && <Items />}
+    {tab==='auto'     && <AutoPO />}
+    {tab==='ocr'      && <InvoiceOCR />}
+    {tab==='users'    && <UsersAdmin />}
+    {tab==='settings' && <SettingsPanel />}
+  </>
+)}
 
       <style>{baseCss}</style>
     </div>
