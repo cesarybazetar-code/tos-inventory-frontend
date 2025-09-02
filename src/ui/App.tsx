@@ -561,6 +561,18 @@ const baseCss = `
   th,td{padding:8px;border-top:1px solid #eee;text-align:left}
   .muted{color:#6b7280}
   .paper-only{display:none}
+
+  /* ====== MOBILE ====== */
+  @media (max-width: 740px){
+    .row{grid-template-columns:1fr !important}
+    table{display:block;overflow-x:auto;white-space:nowrap}
+    input,select,button{font-size:16px;min-height:44px} /* avoid iOS zoom */
+    .btn{width:100%}
+    /* let the tab buttons wrap on small screens */
+    .screen-only > div:first-child{flex-wrap:wrap}
+  }
+
+  /* ====== PRINT ====== */
   @media print{
     body{margin:0}
     .screen-only{display:none !important}
