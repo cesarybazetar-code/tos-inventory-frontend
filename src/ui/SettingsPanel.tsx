@@ -62,9 +62,8 @@ function BasicSettings() {
 
 /** ------- CSV Importer ------- */
 function Importer() {
-  const [msg, setMsg] = useState('');
-  const [importType, setImportType] = useState<'catalog'|'sales'|'labor'|'pmix'>('catalog');
-  const [msg, setMsg] = useState('');
+  const [status, setStatus] = useState('');
+  const [importType, setImportType] = useState<'catalog' | 'sales' | 'labor' | 'pmix'>('catalog');
 
   const upload = async (file: File) => {
     const base = getApiBase();
@@ -78,7 +77,6 @@ function Importer() {
         body: fd,
       });
 
-      // Try text first, then parse if JSON (handles both kinds of responses)
       const txt = await r.text();
       let data: any = txt;
       try { data = JSON.parse(txt); } catch {}
@@ -93,7 +91,7 @@ function Importer() {
         return;
       }
 
-      setMsg(
+      setStatus(
         typeof data === 'string'
           ? data
           : `Imported ${data.created ?? 0} new, ${data.updated ?? 0} updated`
@@ -105,10 +103,13 @@ function Importer() {
 
   return (
     <div className="card screen-only">
-      <h3>Import Catalog CSV</h3>
+      <h3>Import CSV (Catalog / Sales / Labor / PMix)</h3>
       <div className="row">
         <label>Import Type
-          <select value={importType} onChange={(e)=>setImportType(e.target.value as any)}>
+          <select
+            value={importType}
+            onChange={(e) => setImportType(e.target.value as 'catalog' | 'sales' | 'labor' | 'pmix')}
+          >
             <option value="catalog">Catalog</option>
             <option value="sales">Sales (Toast CSV)</option>
             <option value="labor">Labor (Toast CSV)</option>
@@ -117,11 +118,11 @@ function Importer() {
         </label>
       </div>
       <input
-        type="file" 
+        type="file"
         accept=".csv"
         onChange={(e) => e.target.files && upload(e.target.files[0])}
       />
-      <div className="muted">{msg}</div>
+      <div className="muted">{status}</div>
     </div>
   );
 }
@@ -154,7 +155,6 @@ function ResetPanel() {
         body: JSON.stringify({ targets: selection }),
       });
 
-      // Read text, try to parse JSON, craft a readable message
       const txt = await r.text();
       let data: any = txt;
       try { data = JSON.parse(txt); } catch {}
@@ -183,7 +183,6 @@ function ResetPanel() {
   return (
     <div className="card screen-only">
       <h3>Reset Options</h3>
-
       <div className="row">
         <label>
           <input
@@ -207,9 +206,7 @@ function ResetPanel() {
           /> Users
         </label>
       </div>
-
       <button className="btn" onClick={reset}>Reset Selected</button>
-
       <div className="muted" style={{ marginTop: 8 }}>
         <b>Catalog Reset:</b> select <i>Items</i> + <i>Counts</i>.<br/>
         <b>Factory Reset:</b> select <i>Items</i> + <i>Counts</i> + <i>Users</i>.<br/>
