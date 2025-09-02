@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 
-/** Lightweight helpers (scoped here so this file is self-contained) */
+/** ===== Helpers (self-contained) ===== */
 const API_DEFAULT =
   (import.meta as any).env?.VITE_API_URL ||
   (import.meta as any).env?.VITE_API_BASE_URL ||
@@ -23,7 +23,7 @@ function getAdminKey() {
   return localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT;
 }
 
-/** CSV Importer (admin/manager) */
+/** ===== CSV Importer (admin/manager) ===== */
 function Importer(){
   const [msg,setMsg]=useState('');
   const upload = async (file:File)=>{
@@ -51,7 +51,7 @@ function Importer(){
   );
 }
 
-/** Reset Panel — supports multiple reset modes */
+/** ===== Reset Panel (admin) ===== */
 function ResetPanel(){
   const [selection, setSelection] = useState<string[]>([]);
 
@@ -77,7 +77,7 @@ function ResetPanel(){
     });
     const data = await r.json().catch(()=>({}));
     if(!r.ok){
-      alert((data && data.detail) || 'Reset failed');
+      alert((data && (data.detail || data.message)) || 'Reset failed');
       return;
     }
     alert(data.message || 'Reset complete');
@@ -105,9 +105,34 @@ function ResetPanel(){
   );
 }
 
+/** ===== Settings Panel (inputs + importer + reset) ===== */
 export default function SettingsPanel(){
+  const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
+  const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
+
+  const save = ()=>{
+    if(api) localStorage.setItem('VITE_API_BASE_URL', api);
+    else localStorage.removeItem('VITE_API_BASE_URL');
+
+    if(key) localStorage.setItem('admin_key', key);
+    else localStorage.removeItem('admin_key');
+
+    alert('Saved. Reloading…');
+    window.location.reload();
+  };
+
   return (
     <>
+      <div className="card">
+        <h3>Settings</h3>
+        <div className="row">
+          <input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
+          <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
+          <button className="btn screen-only" onClick={save}>Save</button>
+        </div>
+        <div className="muted">You can pin the API here if it isn’t provided by env vars.</div>
+      </div>
+
       <Importer />
       <ResetPanel />
     </>
