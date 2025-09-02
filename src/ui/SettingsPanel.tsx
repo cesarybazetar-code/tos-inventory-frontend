@@ -63,6 +63,8 @@ function BasicSettings() {
 /** ------- CSV Importer ------- */
 function Importer() {
   const [msg, setMsg] = useState('');
+  const [importType, setImportType] = useState<'catalog'|'sales'|'labor'|'pmix'>('catalog');
+  const [msg, setMsg] = useState('');
 
   const upload = async (file: File) => {
     const base = getApiBase();
@@ -70,7 +72,7 @@ function Importer() {
     fd.append('file', file);
 
     try {
-      const r = await fetch(base + '/import/catalog', {
+      const r = await fetch(base + `/import/${importType}`, {
         method: 'POST',
         headers: { 'x-admin-key': getAdminKey(), ...authHeaders() },
         body: fd,
@@ -104,8 +106,18 @@ function Importer() {
   return (
     <div className="card screen-only">
       <h3>Import Catalog CSV</h3>
+      <div className="row">
+        <label>Import Type
+          <select value={importType} onChange={(e)=>setImportType(e.target.value as any)}>
+            <option value="catalog">Catalog</option>
+            <option value="sales">Sales (Toast CSV)</option>
+            <option value="labor">Labor (Toast CSV)</option>
+            <option value="pmix">PMix (Toast CSV)</option>
+          </select>
+        </label>
+      </div>
       <input
-        type="file"
+        type="file" 
         accept=".csv"
         onChange={(e) => e.target.files && upload(e.target.files[0])}
       />
