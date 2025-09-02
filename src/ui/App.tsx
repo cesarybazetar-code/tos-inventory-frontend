@@ -73,29 +73,6 @@ const rolePermissions: Record<string, Array<'counts'|'items'|'auto'|'settings'|'
   viewer:  ['counts'],
 };
 
-// ====== SETTINGS (solo admin) ======
-function Settings(){
-  const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
-  const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
-  const save = ()=>{
-    if(api) localStorage.setItem('VITE_API_BASE_URL', api); else localStorage.removeItem('VITE_API_BASE_URL');
-    if(key) localStorage.setItem('admin_key', key); else localStorage.removeItem('admin_key');
-    alert('Saved. Reload the page.');
-    window.location.reload();
-  };
-  return (
-    <div className="card">
-      <h3>Settings</h3>
-      <div className="row">
-        <input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
-        <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
-        <button className="btn screen-only" onClick={save}>Save</button>
-      </div>
-      <div className="muted">Puedes fijar el API aquí si no viene por variable de entorno.</div>
-    </div>
-  );
-}
-
 // ====== IMPORTER (admin/manager) ======
 function Importer(){
   const [msg,setMsg]=useState('');
@@ -371,6 +348,31 @@ const Auto  = AutoPO;
 const OCR   = InvoiceOCR;
 const Users = UsersAdmin;
 
+// ====== SETTINGS (solo admin) ======
+function Settings(){
+  const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
+  const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
+  const save = ()=>{
+    if(api) localStorage.setItem('VITE_API_BASE_URL', api); else localStorage.removeItem('VITE_API_BASE_URL');
+    if(key) localStorage.setItem('admin_key', key); else localStorage.removeItem('admin_key');
+    alert('Saved. Reload the page.');
+    window.location.reload();
+  };
+  return (
+    <div className="card">
+      <h3>Settings</h3>
+      <div className="row">
+        <input placeholder="API URL" value={api} onChange={e=>setApi(e.target.value)} />
+        <input placeholder="Admin Key (optional)" value={key} onChange={e=>setKey(e.target.value)} />
+        <button className="btn screen-only" onClick={save}>Save</button>
+      </div>
+      <div className="muted">Puedes fijar el API aquí si no viene por variable de entorno.</div>
+      {/* Importer lives here so admin can upload catalog CSV */}
+      <Importer />
+    </div>
+  );
+}
+
 // ====== TOP BAR ======
 function TopBar({tab,setTab,allowedTabs}:{tab:string,setTab:(t:any)=>void,allowedTabs:Array<string>}){
   const email = localStorage.getItem('email') || '';
@@ -459,9 +461,9 @@ export default function App(){
         <>
           {tab==='counts'   && <Counts />}
           {tab==='items'    && <Items />}
-          {tab==='auto'     && <Auto />}
-          {tab==='ocr'      && <OCR />}
-          {tab==='users'    && <Users />}
+          {tab==='auto'     && <AutoPO />}
+          {tab==='ocr'      && <InvoiceOCR />}
+          {tab==='users'    && <UsersAdmin />}
           {tab==='settings' && <Settings />}
         </>
       )}
