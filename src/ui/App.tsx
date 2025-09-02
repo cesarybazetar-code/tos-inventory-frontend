@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import InvoiceOCR from './InvoiceOCR';
 import Login from './Login';
 import SettingsPanel from './SettingsPanel';
+import { STORAGE_AREAS } from '../lib/storageAreas';
 
 // ====== ENV + STORAGE DEFAULTS ======
 const API_DEFAULT =
@@ -432,7 +433,11 @@ function CatalogEditor() {
             <th>Name</th>
             <th>Area</th>
             <th>PAR</th>
-            <th>Price</th>
+            <th>Unit</th>
+            <th>Basis</th>
+            <th>Per-unit $</th>
+            <th>Order $ + Unit</th>
+            <th>Case Size / Conv</th>
             <th>Active</th>
           </tr>
         </thead>
@@ -452,7 +457,7 @@ function CatalogEditor() {
   );
 }
 
-// ====== TOP BAR ======
+// ====== TOP BAR (sticky, centered, gradient) ======
 function TopBar({
   tab, setTab, allowedTabs,
 }: { tab: string; setTab: (t: any) => void; allowedTabs: Array<string>; }) {
@@ -465,25 +470,37 @@ function TopBar({
 
   const TabBtn = ({ id, label }: { id: any; label: string }) =>
     allowedTabs.includes(id) ? (
-      <button className={'tab '+(tab===id?'active':'')} onClick={()=>setTab(id)}>{label}</button>
+      <button
+        className={'tab '+(tab===id?'active':'')}
+        onClick={()=>setTab(id)}
+        aria-pressed={tab===id}
+      >
+        {label}
+      </button>
     ) : null;
 
   return (
-    <div className="screen-only" style={{display:'flex',gap:8,marginBottom:12,alignItems:'center',justifyContent:'space-between'}}>
-      <div style={{display:'flex',gap:8}}>
-        <TabBtn id="counts" label="Counts" />
-        <TabBtn id="catalog" label="Catalog" /> {/* NEW TAB */}
-        <TabBtn id="items"  label="Items" />
-        <TabBtn id="auto"   label="Auto-PO" />
-        <TabBtn id="ocr"    label="Scan Invoice" />
-        <TabBtn id="users"  label="Users" />
-        <TabBtn id="settings" label="Settings" />
+    <header className="topnav screen-only" role="navigation" aria-label="Main Navigation">
+      <div className="topnav-inner">
+        <div className="brand">
+          <span className="logo">TOS</span>
+          <span className="brand-text">Inventory</span>
+        </div>
+        <nav className="tabs-wrap">
+          <TabBtn id="counts"   label="Counts" />
+          <TabBtn id="catalog"  label="Catalog" />
+          <TabBtn id="items"    label="Items" />
+          <TabBtn id="auto"     label="Auto-PO" />
+          <TabBtn id="ocr"      label="Scan Invoice" />
+          <TabBtn id="users"    label="Users" />
+          <TabBtn id="settings" label="Settings" />
+        </nav>
+        <div className="userbox">
+          <span className="muted">{email} ({role})</span>
+          <button className="btn outline" onClick={logout} title="Logout">Logout</button>
+        </div>
       </div>
-      <div className="muted" style={{display:'flex',gap:8,alignItems:'center'}}>
-        <span>{email} ({role})</span>
-        <button className="btn" onClick={logout}>Logout</button>
-      </div>
-    </div>
+    </header>
   );
 }
 
@@ -551,32 +568,58 @@ export default function App() {
 
 // ====== CSS ======
 const baseCss = `
-  .btn{padding:8px 12px;border:1px solid #000;background:#000;color:#fff;border-radius:10px;cursor:pointer}
-  .tab{padding:8px 12px;border:1px solid #000;border-radius:10px;background:#fff}
-  .tab.active{background:#000;color:#fff}
-  .card{border:1px solid #e5e7eb;border-radius:12px;padding:16px;margin:10px 0}
+  :root{
+    --bg:#0b1020; --card:#111a2d; --line:#1e2a45;
+    --text:#e8ecf7; --muted:#95a3c6;
+    --accent:#6ea8fe; --accent-2:#9c6eff;
+    --btn:#111a2d; --btn-text:#e8ecf7; --btn-border:#2a3c66;
+  }
+  html,body{background:var(--bg); color:var(--text)}
+  *{box-sizing:border-box}
+
+  .topnav{position:sticky; top:0; z-index:1000;
+    background: linear-gradient(135deg, rgba(110,168,254,0.18), rgba(156,110,255,0.18));
+    backdrop-filter: blur(8px); border-bottom:1px solid rgba(148,163,184,0.15);
+  }
+  .topnav-inner{display:flex; align-items:center; justify-content:space-between;
+    max-width:1040px; margin:0 auto; padding:10px 14px;}
+  .brand{display:flex; align-items:center; gap:10px}
+  .logo{display:inline-grid; place-items:center; width:32px;height:32px;border-radius:10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color:#0b1020; font-weight:800;}
+  .brand-text{font-weight:700; letter-spacing:0.3px}
+  .tabs-wrap{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; align-items:center;}
+
+  .tab{padding:8px 12px; border:1px solid var(--btn-border); background:rgba(17,26,45,0.9);
+    color:var(--text); border-radius:999px; cursor:pointer; transition: transform .08s, background .2s, border-color .2s;}
+  .tab:hover{ transform: translateY(-1px); border-color: var(--accent) }
+  .tab.active{ background: linear-gradient(135deg, var(--accent), var(--accent-2)); color:#0b1020; border-color: transparent; }
+
+  .btn{padding:9px 14px; border:1px solid var(--btn-border); background:var(--btn); color:var(--btn-text);
+    border-radius:12px; cursor:pointer; transition:all .15s;}
+  .btn:hover{ border-color: var(--accent); transform: translateY(-1px) }
+  .btn.outline{ background:transparent }
+
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin:12px 0; }
   .row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:6px 0}
-  input,select{padding:8px;border:1px solid #cbd5e1;border-radius:10px}
+  input,select{padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:#0e1730;color:var(--text)}
   table{width:100%;border-collapse:collapse;margin-top:10px}
-  th,td{padding:8px;border-top:1px solid #eee;text-align:left}
-  .muted{color:#6b7280}
+  th,td{padding:10px;border-top:1px solid var(--line);text-align:left}
+  .muted{color:var(--muted)}
   .paper-only{display:none}
 
-  /* ====== MOBILE ====== */
   @media (max-width: 740px){
     .row{grid-template-columns:1fr !important}
     table{display:block;overflow-x:auto;white-space:nowrap}
-    input,select,button{font-size:16px;min-height:44px} /* avoid iOS zoom */
+    input,select,button{font-size:16px;min-height:44px}
     .btn{width:100%}
-    /* let the tab buttons wrap on small screens */
-    .screen-only > div:first-child{flex-wrap:wrap}
+    .tabs-wrap{justify-content:center}
+    .userbox{display:none}
   }
 
-  /* ====== PRINT ====== */
   @media print{
     body{margin:0}
     .screen-only{display:none !important}
-    .card{border:none;padding:0;margin:0}
+    .card{border:none;padding:0;margin:0;background:transparent}
     .tab, .btn{display:none !important}
     .print-table{width:100%;border-collapse:collapse}
     .print-table th, .print-table td{border:1px solid #000;padding:6px}
