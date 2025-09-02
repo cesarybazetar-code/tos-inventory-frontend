@@ -141,31 +141,77 @@ function Items() {
   );
 }
 
-// ====== COUNTS ======
-function Counts() {
-  const [items, setItems] = useState<Item[]>([]);
-  const [area, setArea] = useState('Cooking Line');
-  const [lines, setLines] = useState<Record<number, number>>({});
-  const [newName, setNewName] = useState('');
-  const [newPar, setNewPar] = useState(0);
+// ====== COUNTS with suggestions ======
+function Counts(){
+  const [items,setItems]=useState<Item[]>([]);
+  const [area,setArea]=useState('Cooking Line');
+  const [lines,setLines]=useState<Record<number,number>>({});
+  const [newName,setNewName]=useState('');
+  const [newPar,setNewPar]=useState(0);
 
-  const load = async () => {
-    setItems(await apiGet('/items?area=' + encodeURIComponent(area)));
+  // suggestions
+  const [suggestions,setSuggestions]=useState<Item[]>([]);
+  const [showSug,setShowSug]=useState(false);
+  const [loadingSug,setLoadingSug]=useState(false);
+  let sugTimer: number | undefined;
+
+  const load = async()=>{ setItems(await apiGet('/items?area='+encodeURIComponent(area))); };
+  useEffect(()=>{load();},[area]);
+
+  // tiny string similarity (Dice coefficient on bigrams)
+  function sim(a:string,b:string){
+    a=a.toLowerCase().trim(); b=b.toLowerCase().trim();
+    if(!a||!b) return 0;
+    if(a===b) return 1;
+    const bigrams=(s:string)=> {
+      const arr:string[]=[]; for(let i=0;i<s.length-1;i++) arr.push(s.slice(i,i+2));
+      return arr;
+    };
+    const A=bigrams(a), B=bigrams(b);
+    const setA=new Map<string,number>(); A.forEach(x=>setA.set(x,(setA.get(x)||0)+1));
+    let inter=0; B.forEach(x=>{ const c=setA.get(x)||0; if(c>0){ inter+=1; setA.set(x,c-1); }});
+    return (2*inter)/(A.length+B.length || 1);
+  }
+
+  // fetch suggestions as user types
+  const fetchSuggestions = async (q:string)=>{
+    if(q.trim().length < 2){ setSuggestions([]); return; }
+    setLoadingSug(true);
+    try{
+      const res: Item[] = await apiGet('/items?q='+encodeURIComponent(q));
+      // rank by similarity to the typed text
+      const ranked = res
+        .map(r => ({ r, s: sim(q, r.name) }))
+        .sort((a,b)=> b.s - a.s)
+        .slice(0,5)
+        .map(x=>x.r);
+      setSuggestions(ranked);
+    }catch(_){}
+    setLoadingSug(false);
   };
-  useEffect(() => {
-    load();
-  }, [area]);
 
-  const save = async () => {
+  const onType = (v:string)=>{
+    setNewName(v);
+    setShowSug(true);
+    // debounce network a bit
+    if(sugTimer) window.clearTimeout(sugTimer);
+    sugTimer = window.setTimeout(()=>fetchSuggestions(v), 180) as any;
+  };
+
+  const applySuggestion = (it: Item)=>{
+    setNewName(it.name);
+    setNewPar(it.par ?? 0);
+    setShowSug(false);
+  };
+
+  const save = async()=>{
     const payload = {
       storage_area: area,
       lines: Object.entries(lines)
-        .filter(([_, q]) => (parseFloat(q as any) || 0) > 0)
-        .map(([id, qty]) => ({ item_id: parseInt(id), qty: Number(qty) })),
+        .filter(([_,q])=>(parseFloat(q as any)||0)>0)
+        .map(([id,qty])=>({item_id:parseInt(id), qty:Number(qty)}))
     };
-    await apiPost('/counts', payload);
-    setLines({});
-    load();
+    await apiPost('/counts', payload); setLines({}); load();
   };
 
   const role = localStorage.getItem('role') || 'viewer';
@@ -173,57 +219,63 @@ function Counts() {
   const canSave = role === 'admin' || role === 'manager' || role === 'counter';
 
   return (
-    <div className="card">
-      <div
-        className="header screen-only"
-        style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}
-      >
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <h3 style={{ margin: 0 }}>Counts — {area}</h3>
-          <select value={area} onChange={e => setArea(e.target.value)}>
-            {[
-              'Cooking Line',
-              'Meat',
-              'Seafood',
-              'Dairy',
-              'Produce',
-              'Dry & Other',
-              'Freezer',
-              'Bev & Coffee',
-              'Grocery',
-            ].map(a => (
-              <option key={a}>{a}</option>
-            ))}
+    <div className="card" style={{position:'relative'}}>
+      <div className="header screen-only" style={{display:'flex',gap:12,alignItems:'center',justifyContent:'space-between'}}>
+        <div style={{display:'flex',gap:12,alignItems:'center'}}>
+          <h3 style={{margin:0}}>Counts — {area}</h3>
+          <select value={area} onChange={e=>setArea(e.target.value)}>
+            {['Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'].map(a=><option key={a}>{a}</option>)}
           </select>
-          {canSave && (
-            <button className="btn" onClick={save}>
-              Save Count
-            </button>
-          )}
+          {canSave && <button className="btn" onClick={save}>Save Count</button>}
         </div>
-        <button className="btn" onClick={() => window.print()}>
-          🖨️ Print
-        </button>
+        <button className="btn" onClick={()=>window.print()}>🖨️ Print</button>
       </div>
 
       {canQuickAdd && (
-        <div className="row screen-only">
-          <input placeholder="Add new item here" value={newName} onChange={e => setNewName(e.target.value)} />
+        <div className="row screen-only" style={{position:'relative'}}>
+          <div style={{position:'relative'}}>
+            <input
+              placeholder="Add new item here"
+              value={newName}
+              onChange={e=>onType(e.target.value)}
+              onFocus={()=> setShowSug(true)}
+              onBlur={()=> setTimeout(()=>setShowSug(false), 150)} // let clicks register
+            />
+            {/* suggestions dropdown */}
+            {showSug && (suggestions.length>0 || loadingSug) && (
+              <div style={{
+                position:'absolute', zIndex:10, left:0, right:0, top:'100%',
+                background:'#fff', border:'1px solid #cbd5e1', borderRadius:10, marginTop:4
+              }}>
+                {loadingSug && <div style={{padding:8}} className="muted">Searching…</div>}
+                {suggestions.map(s=>(
+                  <div
+                    key={s.id}
+                    onMouseDown={(e)=>e.preventDefault()}
+                    onClick={()=>applySuggestion(s)}
+                    style={{padding:'8px 10px', cursor:'pointer'}}
+                  >
+                    <b>{s.name}</b> <span className="muted">— {s.storage_area||'-'} | PAR: {s.par ?? 0}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <input
             placeholder="PAR (optional)"
             type="number"
             value={newPar}
-            onChange={e => setNewPar(parseFloat(e.target.value || '0'))}
+            onChange={e=>setNewPar(parseFloat(e.target.value||'0'))}
           />
           <div></div>
           <button
             className="btn"
-            onClick={async () => {
-              if (!newName.trim()) return;
+            onClick={async ()=>{
+              if(!newName.trim()) return;
+              // adding the (possibly suggested) item to this area
               await apiPost('/items', { name: newName.trim(), storage_area: area, par: newPar || 0 });
-              setNewName('');
-              setNewPar(0);
-              load();
+              setNewName(''); setNewPar(0); setSuggestions([]); load();
             }}
           >
             Add Item Here
@@ -234,13 +286,13 @@ function Counts() {
       <table className="print-table">
         <thead>
           <tr>
-            <th style={{ width: '55%' }}>Item</th>
-            <th style={{ width: '15%' }}>PAR</th>
-            <th style={{ width: '30%' }}>Count</th>
+            <th style={{width:'55%'}}>Item</th>
+            <th style={{width:'15%'}}>PAR</th>
+            <th style={{width:'30%'}}>Count</th>
           </tr>
         </thead>
         <tbody>
-          {items.map(i => (
+          {items.map(i=>(
             <tr key={i.id}>
               <td>{i.name}</td>
               <td>{i.par ?? 0}</td>
@@ -248,7 +300,7 @@ function Counts() {
                 <input
                   type="number"
                   value={lines[i.id] || ''}
-                  onChange={e => setLines(prev => ({ ...prev, [i.id]: parseFloat(e.target.value || '0') }))}
+                  onChange={e=>setLines(prev=>({...prev,[i.id]:parseFloat(e.target.value||'0')}))}
                   disabled={!canSave}
                 />
               </td>
