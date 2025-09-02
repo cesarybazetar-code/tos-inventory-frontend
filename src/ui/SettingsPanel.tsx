@@ -23,6 +23,43 @@ function getAdminKey() {
   return localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT;
 }
 
+/** ------- Basic Settings (API URL + Admin Key) ------- */
+function BasicSettings() {
+  const [api, setApi] = useState(localStorage.getItem('VITE_API_BASE_URL') || API_DEFAULT);
+  const [key, setKey] = useState(localStorage.getItem('admin_key') || ADMIN_KEY_DEFAULT);
+
+  const save = () => {
+    if (api) localStorage.setItem('VITE_API_BASE_URL', api);
+    else localStorage.removeItem('VITE_API_BASE_URL');
+
+    if (key) localStorage.setItem('admin_key', key);
+    else localStorage.removeItem('admin_key');
+
+    alert('Saved. Reloading…');
+    window.location.reload();
+  };
+
+  return (
+    <div className="card">
+      <h3>Settings</h3>
+      <div className="row">
+        <input
+          placeholder="API URL (e.g. https://tos-inventory-backend.onrender.com)"
+          value={api}
+          onChange={(e) => setApi(e.target.value)}
+        />
+        <input
+          placeholder="Admin Key (optional)"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+        />
+        <button className="btn screen-only" onClick={save}>Save</button>
+      </div>
+      <div className="muted">You can pin the API here if it isn’t provided by env vars.</div>
+    </div>
+  );
+}
+
 /** ------- CSV Importer ------- */
 function Importer() {
   const [msg, setMsg] = useState('');
@@ -39,7 +76,7 @@ function Importer() {
         body: fd,
       });
 
-      // Try text first, then parse if JSON
+      // Try text first, then parse if JSON (handles both kinds of responses)
       const txt = await r.text();
       let data: any = txt;
       try { data = JSON.parse(txt); } catch {}
@@ -91,12 +128,7 @@ function ResetPanel() {
       alert('Select at least one target (Items / Counts / Users)');
       return;
     }
-    if (
-      !window.confirm(
-        '⚠️ This will permanently delete the selected data. Continue?'
-      )
-    )
-      return;
+    if (!window.confirm('⚠️ This will permanently delete the selected data. Continue?')) return;
 
     try {
       const base = getApiBase();
@@ -110,7 +142,7 @@ function ResetPanel() {
         body: JSON.stringify({ targets: selection }),
       });
 
-      // Read text, try to parse JSON, and craft a readable message
+      // Read text, try to parse JSON, craft a readable message
       const txt = await r.text();
       let data: any = txt;
       try { data = JSON.parse(txt); } catch {}
@@ -146,37 +178,29 @@ function ResetPanel() {
             type="checkbox"
             checked={selection.includes('items')}
             onChange={() => toggle('items')}
-          />{' '}
-          Items
+          /> Items
         </label>
         <label>
           <input
             type="checkbox"
             checked={selection.includes('counts')}
             onChange={() => toggle('counts')}
-          />{' '}
-          Counts
+          /> Counts
         </label>
         <label>
           <input
             type="checkbox"
             checked={selection.includes('users')}
             onChange={() => toggle('users')}
-          />{' '}
-          Users
+          /> Users
         </label>
       </div>
 
-      <button className="btn" onClick={reset}>
-        Reset Selected
-      </button>
+      <button className="btn" onClick={reset}>Reset Selected</button>
 
       <div className="muted" style={{ marginTop: 8 }}>
-        <b>Catalog Reset:</b> select <i>Items</i> + <i>Counts</i>.
-        <br />
-        <b>Factory Reset:</b> select <i>Items</i> + <i>Counts</i> +{' '}
-        <i>Users</i>.
-        <br />
+        <b>Catalog Reset:</b> select <i>Items</i> + <i>Counts</i>.<br/>
+        <b>Factory Reset:</b> select <i>Items</i> + <i>Counts</i> + <i>Users</i>.<br/>
         <b>Selective:</b> choose only what you need.
       </div>
     </div>
@@ -187,6 +211,7 @@ function ResetPanel() {
 export default function SettingsPanel() {
   return (
     <>
+      <BasicSettings />
       <Importer />
       <ResetPanel />
     </>
