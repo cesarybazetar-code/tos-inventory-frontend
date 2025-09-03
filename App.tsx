@@ -413,44 +413,240 @@ function UsersAdmin() {
 }
 
 // ====== CATALOG (admin only) ======
+// Drop this whole block in place of your current CatalogEditor()
 function CatalogEditor() {
-  const [items, setItems] = useState<Item[]>([]);
-  const load = async () => setItems(await apiGet('/items'));
-  useEffect(() => { load(); }, []);
+  type Item = {
+    id: number; name: string; storage_area?: string; par?: number; inv_unit_price?: number; active?: boolean;
+    order_unit?: string | null; inventory_unit?: string | null; case_size?: number | null; conversion?: number | null;
+    order_unit_price?: number | null; price_basis?: string | null;
+  };
 
-  const updateItem = async (id: number, patch: Partial<Item>) => {
-    await apiPut(`/items/${id}`, patch);
-    load();
+  // Fixed lists (you can tailor these)
+  const LOCATIONS = [
+    'Cooking Line','Meat','Seafood','Dairy','Produce','Dry & Other','Freezer','Bev & Coffee','Grocery'
+  ];
+  const ORDER_UNITS = ['case','box','pack','bag','bottle','each'];
+  const INV_UNITS   = ['ea','lb','oz','gal','qt','pt','l','ml','kg','g'];
+  const PRICE_BASIS = [
+    {id:'per_case',       label:'per case'},
+    {id:'via_conversion', label:'via conversion'},
+    {id:'per_unit',       label:'set per-unit directly'},
+  ];
+
+  const [items, setItems] = React.useState<Item[]>([]);
+  const [q, setQ] = React.useState('');          // search
+  const [loc, setLoc] = React.useState<string>(''); // filter by location
+
+  const load = async () => {
+    const qs = new URLSearchParams();
+    if (q.trim()) qs.set('q', q.trim());
+    if (loc.trim()) qs.set('area', loc.trim());
+    setItems(await apiGet('/items' + (qs.toString()?`?${qs.toString()}`:'')));
+  };
+  React.useEffect(() => { load(); }, [q, loc]);
+
+  const saveField = async (it: Item, patch: Partial<Item>) => {
+    // Send only fields backend knows; backend will recompute per-unit price
+    const body = {
+      name: patch.name ?? it.name,
+      storage_area: patch.storage_area ?? it.storage_area ?? null,
+      par: patch.par ?? it.par ?? 0,
+      inv_unit_price: patch.inv_unit_price ?? it.inv_unit_price ?? 0,
+      active: patch.active ?? (it.active ?? true),
+
+      order_unit: patch.order_unit ?? it.order_unit ?? null,
+      inventory_unit: patch.inventory_unit ?? it.inventory_unit ?? null,
+      case_size: patch.case_size ?? it.case_size ?? null,
+      conversion: patch.conversion ?? it.conversion ?? null,
+      order_unit_price: patch.order_unit_price ?? it.order_unit_price ?? null,
+      price_basis: patch.price_basis ?? it.price_basis ?? null,
+    };
+    await apiPut(`/items/${it.id}`, body);
+    await load();
+  };
+
+  // Local helper to display the effective per-unit calc live (uses same rules as backend, simplified)
+  const computePU = (it: Item): number | null => {
+    const basis = (it.price_basis || '').toLowerCase();
+    const oup = Number(it.order_unit_price ?? 0);
+    const cs  = Number(it.case_size ?? 0);
+    const conv= Number(it.conversion ?? 0);
+
+    if (basis === 'per_unit' && (it.inv_unit_price ?? 0) > 0) return Number(it.inv_unit_price);
+    if (oup > 0) {
+      if (basis === 'via_conversion' && conv > 0) return +(oup/conv).toFixed(4);
+      if (basis === 'per_case' && cs > 0)         return +(oup/cs).toFixed(4);
+      // fallback if basis not set but only order_unit_price provided: show that number
+      return +oup.toFixed(4);
+    }
+    if ((it.inv_unit_price ?? 0) > 0) return Number(it.inv_unit_price);
+    return null;
   };
 
   return (
     <div className="card">
-      <h3>Catalog (Admin Only)</h3>
-      <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10 }}>
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Area</th>
-            <th>PAR</th>
-            <th>Price</th>
-            <th>Active</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map(i => (
-            <tr key={i.id}>
-              <td><input value={i.name} onChange={e => updateItem(i.id, { name: e.target.value })} /></td>
-              <td><input value={i.storage_area || ''} onChange={e => updateItem(i.id, { storage_area: e.target.value })} /></td>
-              <td><input type="number" value={i.par || 0} onChange={e => updateItem(i.id, { par: parseFloat(e.target.value || '0') })} /></td>
-              <td><input type="number" value={i.inv_unit_price || 0} onChange={e => updateItem(i.id, { inv_unit_price: parseFloat(e.target.value || '0') })} /></td>
-              <td><input type="checkbox" checked={i.active ?? true} onChange={e => updateItem(i.id, { active: e.target.checked })} /></td>
+      <h3>Catalog (Admin)</h3>
+
+      {/* Filters */}
+      <div className="row screen-only">
+        <input placeholder="Search item name…" value={q} onChange={e=>setQ(e.target.value)} />
+        <select value={loc} onChange={e=>setLoc(e.target.value)}>
+          <option value="">All locations</option>
+          {LOCATIONS.map(x => <option key={x} value={x}>{x}</option>)}
+        </select>
+      </div>
+
+      <div className="muted screen-only" style={{marginTop:-4, marginBottom:4}}>
+        Tip: Set <b>Price basis</b> + either <b>Case size</b> or <b>Conversion</b> with an <b>Order unit price</b>. The per-unit price will compute automatically.
+      </div>
+
+      <div style={{overflowX:'auto'}}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', marginTop: 10, minWidth: 980 }}>
+          <thead>
+            <tr>
+              <th style={{width:220}}>Name</th>
+              <th style={{width:160}}>Location</th>
+              <th style={{width:80}}>PAR</th>
+              <th style={{width:120}}>Order Unit</th>
+              <th style={{width:120}}>Inventory Unit</th>
+              <th style={{width:110}}>Case Size</th>
+              <th style={{width:110}}>Conversion</th>
+              <th style={{width:140}}>Order Unit Price</th>
+              <th style={{width:150}}>Price Basis</th>
+              <th style={{width:110}}>Per-Unit (calc)</th>
+              <th style={{width:80}}>Active</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {items.map(it => {
+              const pu = computePU(it);
+              return (
+                <tr key={it.id}>
+                  {/* Name */}
+                  <td>
+                    <input
+                      value={it.name}
+                      onChange={e=>saveField(it, { name: e.target.value })}
+                    />
+                  </td>
+
+                  {/* Location (dropdown) */}
+                  <td>
+                    <select
+                      value={it.storage_area || ''}
+                      onChange={e=>saveField(it, { storage_area: e.target.value || null })}
+                    >
+                      <option value="">—</option>
+                      {LOCATIONS.map(x => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                  </td>
+
+                  {/* PAR */}
+                  <td>
+                    <input
+                      type="number"
+                      value={it.par ?? 0}
+                      onChange={e=>saveField(it, { par: parseFloat(e.target.value || '0') })}
+                    />
+                  </td>
+
+                  {/* Order Unit */}
+                  <td>
+                    <select
+                      value={it.order_unit || ''}
+                      onChange={e=>saveField(it, { order_unit: e.target.value || null })}
+                    >
+                      <option value="">—</option>
+                      {ORDER_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </td>
+
+                  {/* Inventory Unit */}
+                  <td>
+                    <select
+                      value={it.inventory_unit || ''}
+                      onChange={e=>saveField(it, { inventory_unit: e.target.value || null })}
+                    >
+                      <option value="">—</option>
+                      {INV_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </td>
+
+                  {/* Case Size */}
+                  <td>
+                    <input
+                      type="number"
+                      value={it.case_size ?? ''}
+                      placeholder="e.g. 40"
+                      onChange={e=>{
+                        const v = e.target.value;
+                        saveField(it, { case_size: v==='' ? null : parseFloat(v) });
+                      }}
+                    />
+                  </td>
+
+                  {/* Conversion */}
+                  <td>
+                    <input
+                      type="number"
+                      value={it.conversion ?? ''}
+                      placeholder="e.g. 12"
+                      onChange={e=>{
+                        const v = e.target.value;
+                        saveField(it, { conversion: v==='' ? null : parseFloat(v) });
+                      }}
+                    />
+                  </td>
+
+                  {/* Order Unit Price */}
+                  <td>
+                    <input
+                      type="number" step="0.01"
+                      value={it.order_unit_price ?? ''}
+                      placeholder="e.g. 120.00"
+                      onChange={e=>{
+                        const v = e.target.value;
+                        saveField(it, { order_unit_price: v==='' ? null : parseFloat(v) });
+                      }}
+                    />
+                  </td>
+
+                  {/* Price Basis */}
+                  <td>
+                    <select
+                      value={it.price_basis || ''}
+                      onChange={e=>saveField(it, { price_basis: e.target.value || null })}
+                    >
+                      <option value="">—</option>
+                      {PRICE_BASIS.map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
+                    </select>
+                  </td>
+
+                  {/* Per-unit (computed preview) */}
+                  <td>
+                    <span className="muted">{pu ?? '-'}</span>
+                  </td>
+
+                  {/* Active toggle */}
+                  <td style={{textAlign:'center'}}>
+                    <input
+                      type="checkbox"
+                      checked={it.active ?? true}
+                      onChange={e=>saveField(it, { active: e.target.checked })}
+                    />
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="muted" style={{marginTop:6}}>{items.length} item(s)</div>
     </div>
   );
 }
+
+
 
 // ====== TOP BAR ======
 function TopBar({
